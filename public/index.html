@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Histórico Escolar</title>
+<link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+
+<div id="tela-login" class="tela-login">
+  <form id="form-login" class="cartao-login" autocomplete="off">
+    <div class="marca-login">
+      <div class="simbolo">HE</div>
+      <h1>Histórico Escolar</h1>
+      <p>Controle de emissão e entrega</p>
+    </div>
+    <label class="campo">
+      <span>Usuário</span>
+      <input id="login-usuario" name="login" required autofocus>
+    </label>
+    <label class="campo">
+      <span>Senha</span>
+      <input id="login-senha" name="senha" type="password" required>
+    </label>
+    <p class="erro caixa-erro" id="login-erro" hidden></p>
+    <button class="btn primario largura" type="submit">Entrar</button>
+  </form>
+</div>
+
+<div id="tela-app" class="aplicacao" hidden>
+  <div class="cabecalho-escola" id="cabecalho-escola" hidden>
+    <img id="escola-logo" class="escola-logo" alt="Logo da escola" hidden>
+    <div class="escola-texto">
+      <strong id="escola-nome">Dados da escola ainda não cadastrados</strong>
+      <span id="escola-inep" class="secundario"></span>
+    </div>
+    <button type="button" class="btn texto" id="btn-editar-escola" hidden>Editar dados da escola</button>
+  </div>
+
+  <header class="topo">
+    <div class="topo-esquerda">
+      <span class="simbolo pequeno">HE</span>
+      <strong>Histórico Escolar</strong>
+    </div>
+
+    <nav class="abas" id="abas">
+      <button type="button" class="aba ativa" data-painel="confeccionar">
+        A confeccionar <span class="badge ambar" id="badge-confeccionar">0</span>
+      </button>
+      <button type="button" class="aba" data-painel="prontos">
+        Prontos <span class="badge azul" id="badge-prontos">0</span>
+      </button>
+      <button type="button" class="aba" data-painel="entregues">
+        Entregues <span class="badge verde" id="badge-entregues">0</span>
+      </button>
+      <button type="button" class="aba" data-painel="usuarios" id="aba-usuarios" hidden>Usuários</button>
+    </nav>
+
+    <div class="topo-direita">
+      <span id="usuario-atual" class="usuario-atual"></span>
+      <button type="button" class="btn texto" id="btn-sair">Sair</button>
+    </div>
+  </header>
+
+  <main class="conteudo">
+
+    <section class="painel" id="painel-confeccionar">
+      <div class="barra">
+        <input class="busca" id="busca-confeccionar" type="search"
+               placeholder="Buscar por aluno, CPF, responsável ou nº do pedido">
+        <button type="button" class="btn primario" id="btn-novo-pedido">+ Novo pedido</button>
+      </div>
+      <div class="tabela-rolagem">
+        <table>
+          <thead>
+            <tr>
+              <th class="centro">Nº</th>
+              <th>Via</th>
+              <th>Pedido</th>
+              <th>Aluno</th>
+              <th>CPF do aluno</th>
+              <th>Responsável</th>
+              <th>Telefone</th>
+              <th class="acao">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="corpo-confeccionar"></tbody>
+        </table>
+      </div>
+      <p class="vazio" id="vazio-confeccionar" hidden>Nenhum histórico aguardando confecção.</p>
+    </section>
+
+    <section class="painel" id="painel-prontos" hidden>
+      <div class="barra">
+        <input class="busca" id="busca-prontos" type="search"
+               placeholder="Buscar por aluno, CPF, responsável ou nº do pedido">
+      </div>
+      <div class="tabela-rolagem">
+        <table>
+          <thead>
+            <tr>
+              <th class="centro">Nº</th>
+              <th>Via</th>
+              <th>Aluno</th>
+              <th>CPF do aluno</th>
+              <th>Responsável</th>
+              <th>Telefone</th>
+              <th>Confecção</th>
+              <th>PDF</th>
+              <th class="acao">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="corpo-prontos"></tbody>
+        </table>
+      </div>
+      <p class="vazio" id="vazio-prontos" hidden>Nenhum histórico pronto aguardando retirada.</p>
+    </section>
+
+    <section class="painel" id="painel-entregues" hidden>
+      <div class="barra">
+        <input class="busca" id="busca-entregues" type="search"
+               placeholder="Buscar por aluno, CPF, responsável, retirante ou nº do pedido">
+      </div>
+      <div class="tabela-rolagem">
+        <table>
+          <thead>
+            <tr>
+              <th class="centro">Nº</th>
+              <th>Via</th>
+              <th>Aluno</th>
+              <th>Pedido</th>
+              <th>Confecção</th>
+              <th>Entrega</th>
+              <th>Entregue a</th>
+              <th>PDF</th>
+              <th class="acao">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="corpo-entregues"></tbody>
+        </table>
+      </div>
+      <p class="vazio" id="vazio-entregues" hidden>Nenhum histórico entregue ainda.</p>
+    </section>
+
+    <section class="painel" id="painel-usuarios" hidden>
+      <div class="barra">
+        <input class="busca" id="busca-usuarios" type="search" placeholder="Buscar por nome ou login">
+        <button type="button" class="btn primario" id="btn-novo-usuario">+ Novo usuário</button>
+      </div>
+      <div class="tabela-rolagem">
+        <table>
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>Login</th>
+              <th>Perfil</th>
+              <th>Situação</th>
+              <th class="acao">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="corpo-usuarios"></tbody>
+        </table>
+      </div>
+      <p class="vazio" id="vazio-usuarios" hidden>Nenhum usuário encontrado.</p>
+    </section>
+
+  </main>
+</div>
+
+<div class="modal" id="modal-pedido" hidden>
+  <div class="fundo" data-fechar></div>
+  <div class="cartao">
+    <div class="cartao-cabecalho">
+      <h2 id="pedido-titulo">Novo pedido de histórico</h2>
+      <button type="button" class="fecha" data-fechar aria-label="Fechar">&times;</button>
+    </div>
+    <form id="form-pedido" autocomplete="off">
+      <div class="grade">
+        <label class="campo">
+          <span>Tipo de via</span>
+          <select id="pedido-via" name="via">
+            <option value="1">1ª via</option>
+            <option value="2">2ª via</option>
+          </select>
+        </label>
+        <label class="campo">
+          <span>Data do pedido</span>
+          <input type="date" id="pedido-data" name="data_pedido" required>
+        </label>
+      </div>
+      <label class="campo">
+        <span>Nome do responsável pelo pedido</span>
+        <input id="pedido-responsavel" name="responsavel_nome" maxlength="120" required>
+      </label>
+      <label class="campo">
+        <span>Telefone de contato do responsável</span>
+        <input id="pedido-telefone" name="responsavel_telefone" placeholder="(00) 00000-0000" inputmode="tel" required>
+      </label>
+      <label class="campo">
+        <span>Nome completo do aluno</span>
+        <input id="pedido-aluno" name="aluno_nome" maxlength="120" required>
+      </label>
+      <label class="campo">
+        <span>CPF do aluno</span>
+        <input id="pedido-cpf" name="aluno_cpf" placeholder="000.000.000-00" inputmode="numeric" required>
+      </label>
+      <div class="rodape">
+        <button type="button" class="btn" data-fechar>Cancelar</button>
+        <button type="submit" class="btn primario">Salvar pedido</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal" id="modal-confeccao" hidden>
+  <div class="fundo" data-fechar></div>
+  <div class="cartao cartao-estreito">
+    <div class="cartao-cabecalho">
+      <h2>Registrar confecção</h2>
+      <button type="button" class="fecha" data-fechar aria-label="Fechar">&times;</button>
+    </div>
+    <p class="resumo" id="confeccao-resumo"></p>
+    <form id="form-confeccao" autocomplete="off">
+      <label class="campo">
+        <span>Data da confecção</span>
+        <input type="date" id="confeccao-data" required>
+      </label>
+      <div class="campo">
+        <span>Arquivo do histórico</span>
+        <div class="seletor-arquivo">
+          <input type="text" id="confeccao-pdf" readonly placeholder="Nenhum arquivo selecionado">
+          <button type="button" class="btn" id="btn-escolher-pdf">Escolher arquivo…</button>
+        </div>
+        <input type="file" id="confeccao-arquivo" accept=".pdf,application/pdf" hidden>
+        <small class="ajuda">Abre o explorador do Windows. O arquivo é copiado para a pasta do sistema e o caminho fica gravado no banco.</small>
+      </div>
+      <div class="rodape">
+        <button type="button" class="btn" data-fechar>Cancelar</button>
+        <button type="submit" class="btn primario">Marcar como pronto</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal" id="modal-entrega" hidden>
+  <div class="fundo" data-fechar></div>
+  <div class="cartao cartao-estreito">
+    <div class="cartao-cabecalho">
+      <h2>Registrar entrega</h2>
+      <button type="button" class="fecha" data-fechar aria-label="Fechar">&times;</button>
+    </div>
+    <p class="resumo" id="entrega-resumo"></p>
+    <form id="form-entrega" autocomplete="off">
+      <div class="grade">
+        <label class="campo">
+          <span>Data da entrega</span>
+          <input type="date" id="entrega-data" required>
+        </label>
+        <label class="campo">
+          <span>CPF de quem recebeu</span>
+          <input id="entrega-cpf" placeholder="000.000.000-00" inputmode="numeric" required>
+        </label>
+      </div>
+      <label class="campo">
+        <span>Nome de quem recebeu o histórico</span>
+        <input id="entrega-nome" maxlength="120" required>
+      </label>
+      <div class="rodape">
+        <button type="button" class="btn" data-fechar>Cancelar</button>
+        <button type="submit" class="btn primario">Confirmar entrega</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal" id="modal-usuario" hidden>
+  <div class="fundo" data-fechar></div>
+  <div class="cartao cartao-estreito">
+    <div class="cartao-cabecalho">
+      <h2 id="usuario-titulo">Novo usuário</h2>
+      <button type="button" class="fecha" data-fechar aria-label="Fechar">&times;</button>
+    </div>
+    <form id="form-usuario" autocomplete="off">
+      <label class="campo">
+        <span>Nome</span>
+        <input id="usuario-nome" maxlength="120" required>
+      </label>
+      <div class="grade">
+        <label class="campo">
+          <span>Login</span>
+          <input id="usuario-login" maxlength="30" required>
+        </label>
+        <label class="campo">
+          <span>Perfil</span>
+          <select id="usuario-perfil">
+            <option value="operador">Operador</option>
+            <option value="admin">Administrador</option>
+          </select>
+        </label>
+      </div>
+      <label class="campo">
+        <span id="usuario-senha-rotulo">Senha</span>
+        <input id="usuario-senha" type="password" maxlength="72" autocomplete="new-password">
+        <small class="ajuda" id="usuario-senha-ajuda">Mínimo de 6 caracteres.</small>
+      </label>
+      <label class="campo">
+        <span id="usuario-senha2-rotulo">Confirmar senha</span>
+        <input id="usuario-senha2" type="password" maxlength="72" autocomplete="new-password">
+        <small class="ajuda" id="usuario-senha2-ajuda">Digite a mesma senha novamente.</small>
+      </label>
+      <label class="campo check" id="usuario-ativo-linha" hidden>
+        <input type="checkbox" id="usuario-ativo">
+        <span>Usuário ativo</span>
+      </label>
+      <div class="rodape">
+        <button type="button" class="btn" data-fechar>Cancelar</button>
+        <button type="submit" class="btn primario">Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal" id="modal-escola" hidden>
+  <div class="fundo" data-fechar></div>
+  <div class="cartao cartao-estreito">
+    <div class="cartao-cabecalho">
+      <h2>Dados da escola</h2>
+      <button type="button" class="fecha" data-fechar aria-label="Fechar">&times;</button>
+    </div>
+    <form id="form-escola" autocomplete="off">
+      <div class="campo">
+        <span>Logo da escola</span>
+        <div class="seletor-arquivo">
+          <input type="text" id="escola-logo-nome" readonly placeholder="Nenhum logo cadastrado">
+          <button type="button" class="btn" id="btn-escolher-logo">Escolher logo…</button>
+        </div>
+        <input type="file" id="escola-logo-arquivo" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+        <img id="escola-logo-preview" class="logo-preview" alt="Pré-visualização do logo" hidden>
+        <small class="ajuda">Logo quadrado de 2 cm × 2 cm. Formatos PNG, JPG, WebP ou GIF, até 2 MB. O arquivo é copiado para a pasta do sistema.</small>
+        <button type="button" class="btn texto" id="btn-remover-logo" hidden>Remover logo</button>
+      </div>
+      <label class="campo">
+        <span>Nome completo da escola</span>
+        <input id="escola-nome-campo" maxlength="160" required placeholder="Ex.: Escola Municipal Professora Maria Silva">
+      </label>
+      <label class="campo">
+        <span>Código INEP</span>
+        <input id="escola-inep-campo" inputmode="numeric" maxlength="8" required placeholder="00000000">
+        <small class="ajuda">Somente os 8 dígitos, sem pontos ou espaços.</small>
+      </label>
+      <div class="rodape">
+        <button type="button" class="btn" data-fechar>Cancelar</button>
+        <button type="submit" class="btn primario">Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal" id="modal-excluir" hidden>
+  <div class="fundo" data-fechar></div>
+  <div class="cartao cartao-estreito">
+    <div class="cartao-cabecalho">
+      <h2>Excluir pedido</h2>
+      <button type="button" class="fecha" data-fechar aria-label="Fechar">&times;</button>
+    </div>
+    <p class="resumo" id="excluir-resumo"></p>
+    <div class="caixa-erro" id="excluir-confirma">
+      <p class="erro" id="excluir-titulo-lista">Tudo abaixo será excluído das tabelas e não poderá ser recuperado:</p>
+      <ul class="lista-avisos" id="excluir-avisos"></ul>
+    </div>
+    <p class="ajuda">Confirme apenas se tem certeza do que está fazendo.</p>
+    <div class="rodape">
+      <button type="button" class="btn" data-fechar>Cancelar</button>
+      <button type="button" class="btn perigo" id="btn-confirmar-exclusao">Sim, excluir</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modal-pdf-viewer" hidden>
+  <div class="fundo" data-fechar></div>
+  <div class="cartao cartao-largo">
+    <div class="cartao-cabecalho">
+      <h2 id="viewer-titulo">Histórico</h2>
+      <button type="button" class="fecha" data-fechar aria-label="Fechar">&times;</button>
+    </div>
+    <iframe id="viewer-frame" title="Histórico escolar em PDF"></iframe>
+    <div class="rodape">
+      <button type="button" class="btn" data-fechar>Fechar</button>
+    </div>
+  </div>
+</div>
+
+<div id="notificacoes" class="notificacoes"></div>
+
+<script src="/js/app.js"></script>
+</body>
+</html>
