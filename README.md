@@ -1,0 +1,1 @@
+Criado 100% com IA. Requisitos: Node.js 24+ e Git. Abre em http://localhost:3000; no primeiro acesso cria o usuário admin / admin123 (troque a senha em seguida). A pasta pdfs/ e o banco são criados automaticamente.
