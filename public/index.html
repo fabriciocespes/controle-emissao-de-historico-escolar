@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Histórico Escolar</title>
+<title>Sistema de Gerenciamento Escolar</title>
 <link rel="stylesheet" href="/css/styles.css">
 </head>
 <body>
@@ -11,9 +11,15 @@
 <div id="tela-login" class="tela-login">
   <form id="form-login" class="cartao-login" autocomplete="off">
     <div class="marca-login">
-      <div class="simbolo">HE</div>
-      <h1>Histórico Escolar</h1>
-      <p>Controle de emissão e entrega</p>
+      <div class="simbolo" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 10 12 5 2 10l10 5 10-5Z"/>
+          <path d="M6 12.5V17c0 1.7 2.7 3 6 3s6-1.3 6-3v-4.5"/>
+        </svg>
+      </div>
+      <h1>Sistema de Gerenciamento Escolar</h1>
+      <p>Gestão escolar integrada</p>
     </div>
     <label class="campo">
       <span>Usuário</span>
@@ -29,23 +35,25 @@
 </div>
 
 <div id="tela-app" class="aplicacao" hidden>
-  <div class="cabecalho-escola" id="cabecalho-escola" hidden>
-    <img id="escola-logo" class="escola-logo" alt="Logo da escola" hidden>
-    <div class="escola-texto">
-      <strong id="escola-nome">Dados da escola ainda não cadastrados</strong>
-      <span id="escola-inep" class="secundario"></span>
-    </div>
-    <button type="button" class="btn texto" id="btn-editar-escola" hidden>Editar dados da escola</button>
-  </div>
-
-  <header class="topo">
-    <div class="topo-esquerda">
-      <span class="simbolo pequeno">HE</span>
-      <strong>Histórico Escolar</strong>
+  <aside class="lateral">
+    <div class="marca-lateral">
+      <span class="simbolo pequeno" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor"
+             stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 10 12 5 2 10l10 5 10-5Z"/>
+          <path d="M6 12.5V17c0 1.7 2.7 3 6 3s6-1.3 6-3v-4.5"/>
+        </svg>
+      </span>
+      <span class="marca-lateral-texto">Sistema de Gerenciamento Escolar</span>
     </div>
 
-    <nav class="abas" id="abas">
-      <button type="button" class="aba ativa" data-painel="confeccionar">
+    <nav class="menu" id="abas" aria-label="Menu principal">
+      <p class="menu-grupo">Ano letivo</p>
+      <button type="button" class="aba ativa" data-painel="calendario" id="aba-calendario">
+        Calendário do ano letivo
+      </button>
+      <p class="menu-grupo">Histórico Escolar</p>
+      <button type="button" class="aba" data-painel="confeccionar">
         A confeccionar <span class="badge ambar" id="badge-confeccionar">0</span>
       </button>
       <button type="button" class="aba" data-painel="prontos">
@@ -54,18 +62,55 @@
       <button type="button" class="aba" data-painel="entregues">
         Entregues <span class="badge verde" id="badge-entregues">0</span>
       </button>
-      <button type="button" class="aba" data-painel="usuarios" id="aba-usuarios" hidden>Usuários</button>
+      <button type="button" class="aba" data-painel="devendo">
+        Devendo Histórico <span class="badge ambar" id="badge-devendo">0</span>
+      </button>
+      <p class="menu-grupo">Cadastros</p>
+      <button type="button" class="aba" data-painel="alunos">Alunos <span class="badge azul" id="badge-alunos">0</span></button>
+      <button type="button" class="aba" data-painel="funcionarios">Funcionários <span class="badge verde" id="badge-funcionarios">0</span></button>
+      <button type="button" class="aba" data-painel="turmas">Turmas <span class="badge azul" id="badge-turmas">0</span></button>
+      <p class="menu-grupo">Enturmações</p>
+      <button type="button" class="aba" data-painel="matricula">Matrícula</button>
+      <button type="button" class="aba" data-painel="diario">Diário</button>
+      <button type="button" class="aba" data-painel="alocacoes">Professor <span class="badge azul" id="badge-alocacoes">0</span></button>
+      <p class="menu-grupo" id="grupo-configuracoes">Configurações</p>
+      <button type="button" class="aba" data-painel="usuarios" id="aba-usuarios" hidden>Usuários <span class="badge ambar" id="badge-usuarios">0</span></button>
+      <button type="button" class="aba" data-painel="administracao" id="aba-administracao" hidden>Administração</button>
     </nav>
 
-    <div class="topo-direita">
+    <div class="lateral-rodape">
       <span id="usuario-atual" class="usuario-atual"></span>
-      <button type="button" class="btn texto" id="btn-sair">Sair</button>
+      <div class="lateral-rodape-acoes">
+        <button type="button" class="btn texto" id="btn-trocar-senha">Senha</button>
+        <button type="button" class="btn texto" id="btn-sair">Sair</button>
+      </div>
     </div>
-  </header>
+  </aside>
 
-  <main class="conteudo">
+  <div class="principal">
+    <div class="cabecalho-escola" id="cabecalho-escola" hidden>
+      <img id="escola-logo" class="escola-logo" alt="Logo da escola" hidden>
+      <div class="escola-texto">
+        <strong id="escola-nome">Dados da escola ainda não cadastrados</strong>
+        <span id="escola-inep" class="secundario"></span>
+      </div>
+      <button type="button" class="btn texto" id="btn-editar-escola" hidden>Editar dados da escola</button>
+    </div>
 
-    <section class="painel" id="painel-confeccionar">
+    <main class="conteudo">
+
+    <section class="painel" id="painel-calendario">
+      <div class="barra">
+        <span class="secundario" id="calendario-info" style="margin:0"></span>
+        <a class="btn" id="calendario-link" href="/api/ano-letivo/calendario" target="_blank"
+           rel="noopener" hidden>Abrir em nova aba</a>
+      </div>
+      <p class="vazio" id="calendario-vazio" hidden></p>
+      <iframe id="calendario-pdf" title="Calendário do ano letivo" hidden
+              style="width:100%;height:calc(100vh - 240px);border:1px solid rgba(0,0,0,.15);border-radius:10px;background:#fff"></iframe>
+    </section>
+
+    <section class="painel" id="painel-confeccionar" hidden>
       <div class="barra">
         <input class="busca" id="busca-confeccionar" type="search"
                placeholder="Buscar por aluno, CPF, responsável ou nº do pedido">
@@ -143,6 +188,208 @@
       <p class="vazio" id="vazio-entregues" hidden>Nenhum histórico entregue ainda.</p>
     </section>
 
+    <section class="painel" id="painel-devendo" hidden>
+      <form id="form-devendo" autocomplete="off" novalidate>
+        <fieldset class="secao">
+          <legend>Registrar aluno devendo histórico</legend>
+          <p class="ajuda">Cadastre quem ainda não entregou o Histórico Escolar. O aluno entra na lista abaixo.</p>
+          <div class="grade">
+            <label class="campo"><span>Nome do Aluno *</span>
+              <input id="devendo-nome" name="aluno_nome" maxlength="150" required></label>
+            <label class="campo"><span>Unidade Escolar Anterior *</span>
+              <input id="devendo-ue" name="unidade_escolar_anterior" maxlength="120" required></label>
+          </div>
+        </fieldset>
+        <div class="rodape">
+          <button type="submit" class="btn primario" id="btn-adicionar-devendo">Adicionar à lista</button>
+        </div>
+      </form>
+
+      <div class="barra">
+        <input class="busca" id="busca-devendo" type="search" placeholder="Buscar por nome do aluno">
+      </div>
+      <div class="tabela-rolagem">
+        <table>
+          <thead>
+            <tr>
+              <th>Aluno</th>
+              <th>Unidade escolar anterior</th>
+              <th>Cadastrado em</th>
+              <th class="acao">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="corpo-devendo"></tbody>
+        </table>
+      </div>
+      <p class="vazio" id="vazio-devendo" hidden>Nenhum aluno devendo histórico escolar.</p>
+    </section>
+
+    <section class="painel" id="painel-alunos" hidden>
+      <div class="barra">
+        <input class="busca" id="busca-alunos" type="search"
+               placeholder="Buscar por nome, CPF, responsável ou nº do cadastro">
+        <button type="button" class="btn primario" id="btn-novo-aluno">+ Novo aluno</button>
+      </div>
+      <div class="tabela-rolagem">
+        <table>
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>CPF</th>
+              <th>Nascimento</th>
+              <th>Responsável</th>
+              <th>Naturalidade</th>
+              <th class="acao">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="corpo-alunos"></tbody>
+        </table>
+      </div>
+      <p class="vazio" id="vazio-alunos" hidden>Nenhum aluno encontrado.</p>
+    </section>
+
+    <section class="painel" id="painel-matricula" hidden>
+      <div class="barra">
+        <input class="busca" id="busca-matricula" type="search"
+               placeholder="Buscar por nome, CPF ou responsável">
+        <button type="button" class="btn" id="btn-matricula-novo-aluno">+ Inserir Aluno Novo</button>
+      </div>
+      <h3 class="titulo-lista-matricula">Alunos disponíveis para matrícula</h3>
+      <div class="tabela-rolagem">
+        <table>
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>CPF</th>
+              <th>Nascimento</th>
+              <th>Responsável</th>
+              <th>Naturalidade</th>
+              <th class="acao">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="corpo-matricula"></tbody>
+        </table>
+      </div>
+      <p class="vazio" id="vazio-matricula" hidden>Nenhum aluno pendente de matrícula.</p>
+      <h3 class="titulo-lista-matricula">Selecionados para matrícula em lote (<span id="matricular-lote-contador">0</span>)</h3>
+      <ul class="lista-matricula-lote" id="matricula-selecionados"></ul>
+      <p class="vazio" id="vazio-selecionados" hidden>Nenhum aluno selecionado. Clique em "Adicionar" na lista acima.</p>
+      <div class="barra-matricula-rodape">
+        <label class="campo"><span>Turma (ano letivo corrente) *</span>
+          <select id="matricular-lote-turma" name="turma_id" required></select>
+        </label>
+        <button type="button" class="btn primario" id="btn-matricular-lote" hidden>Matricular selecionados</button>
+      </div>
+    </section>
+
+    <section class="painel" id="painel-diario" hidden>
+      <div class="barra">
+        <label class="campo"><span>Ano letivo</span>
+          <select id="diario-ano-letivo"></select>
+        </label>
+        <label class="campo"><span>Turma</span>
+          <select id="diario-turma"></select>
+        </label>
+      </div>
+      <p class="vazio" id="diario-vazio-selecao" hidden>Selecione o ano letivo e a turma para visualizar o diário.</p>
+      <div id="diario-detalhes" hidden>
+        <h3 class="titulo-lista-matricula" id="diario-turma-titulo"></h3>
+        <div id="diario-professores"></div>
+        <h3 class="titulo-lista-matricula">Alunos da turma</h3>
+        <div class="tabela-rolagem">
+          <table>
+            <thead>
+              <tr>
+                <th>Aluno</th>
+                <th>CPF</th>
+                <th>Nº da matrícula</th>
+                <th>Data de início</th>
+                <th>Status</th>
+                <th class="acao">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="corpo-diario"></tbody>
+          </table>
+        </div>
+        <p class="vazio" id="vazio-diario" hidden>Nenhum aluno matriculado nesta turma.</p>
+      </div>
+    </section>
+
+    <section class="painel" id="painel-funcionarios" hidden>
+      <div class="barra">
+        <input class="busca" id="busca-funcionarios" type="search"
+               placeholder="Buscar por nome, CPF, matrícula ou nº do cadastro">
+        <button type="button" class="btn" id="btn-importar-funcionarios">Importar CSV</button>
+        <button type="button" class="btn primario" id="btn-novo-funcionario">+ Novo funcionário</button>
+        <input type="file" id="importar-funcionarios-arquivo" accept=".csv,text/csv" hidden>
+      </div>
+      <div class="tabela-rolagem">
+        <table>
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>Matrícula</th>
+              <th>Cargo</th>
+              <th>Função</th>
+              <th>Admissão</th>
+              <th>Status</th>
+              <th class="acao">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="corpo-funcionarios"></tbody>
+        </table>
+      </div>
+      <p class="vazio" id="vazio-funcionarios" hidden>Nenhum funcionário encontrado.</p>
+    </section>
+
+    <section class="painel" id="painel-turmas" hidden>
+      <div class="barra">
+        <input class="busca" id="busca-turmas" type="search"
+               placeholder="Buscar por sigla, ano, matriz ou turno">
+        <button type="button" class="btn primario" id="btn-nova-turma">+ Nova turma</button>
+      </div>
+      <div class="tabela-rolagem">
+        <table>
+          <thead>
+            <tr>
+              <th>Ano letivo</th>
+              <th>Matriz/Curso</th>
+              <th>Ano de escolaridade</th>
+              <th>Sigla</th>
+              <th>Turno</th>
+              <th>Tipo</th>
+              <th class="acao">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="corpo-turmas"></tbody>
+        </table>
+      </div>
+      <p class="vazio" id="vazio-turmas" hidden>Nenhuma turma encontrada.</p>
+    </section>
+
+    <section class="painel" id="painel-alocacoes" hidden>
+      <div class="barra">
+        <input class="busca" id="busca-alocacoes" type="search"
+               placeholder="Buscar turma por sigla, ano ou turno">
+      </div>
+      <div class="tabela-rolagem">
+        <table>
+          <thead>
+            <tr>
+              <th>Turma</th>
+              <th>Ano letivo</th>
+              <th>Turno</th>
+              <th>Professores</th>
+              <th>Cargo / Função</th>
+              <th class="acao">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="corpo-alocacoes"></tbody>
+        </table>
+      </div>
+      <p class="vazio" id="vazio-alocacoes" hidden>Nenhuma turma encontrada.</p>
+    </section>
+
     <section class="painel" id="painel-usuarios" hidden>
       <div class="barra">
         <input class="busca" id="busca-usuarios" type="search" placeholder="Buscar por nome ou login">
@@ -165,7 +412,45 @@
       <p class="vazio" id="vazio-usuarios" hidden>Nenhum usuário encontrado.</p>
     </section>
 
+    <section class="painel" id="painel-administracao" hidden>
+      <form id="form-ano-letivo" autocomplete="off">
+        <fieldset class="secao">
+          <legend>Ano letivo</legend>
+          <p class="ajuda">Informe o período do ano letivo. As datas entram como padrão na alocação de professores. A Data Base CENSO vem preenchida com a última quarta-feira de maio do ano corrente.</p>
+          <div class="grade">
+            <label class="campo">
+              <span>Data de início do ano letivo *</span>
+              <input type="date" id="ano-letivo-inicio" name="data_inicio" required>
+            </label>
+            <label class="campo">
+              <span>Data de término do ano letivo *</span>
+              <input type="date" id="ano-letivo-fim" name="data_fim" required>
+            </label>
+            <label class="campo">
+              <span>Data Base CENSO *</span>
+              <input type="date" id="ano-letivo-censo" name="data_base_censo" required>
+            </label>
+          </div>
+        </fieldset>
+        <fieldset class="secao">
+          <legend>Calendário (PDF)</legend>
+          <p class="ajuda">Anexe o calendário escolar do ano letivo em PDF. Um novo arquivo substitui o anexado anteriormente.</p>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <button type="button" class="btn primario" id="btn-anexar-calendario">Anexar calendário (PDF)</button>
+            <input type="file" id="anexar-calendario-arquivo" accept=".pdf,application/pdf" hidden>
+            <a class="btn" id="calendario-atual-link" href="/api/ano-letivo/calendario" target="_blank"
+               rel="noopener" hidden>Ver calendário atual</a>
+            <span class="secundario" id="calendario-atual-status" style="margin:0">Nenhum calendário anexado.</span>
+          </div>
+        </fieldset>
+        <div class="rodape">
+          <button type="submit" class="btn primario">Salvar ano letivo</button>
+        </div>
+      </form>
+    </section>
+
   </main>
+  </div>
 </div>
 
 <div class="modal" id="modal-pedido" hidden>
@@ -321,6 +606,58 @@
   </div>
 </div>
 
+<div class="modal" id="modal-turma" hidden>
+  <div class="fundo" data-fechar></div>
+  <div class="cartao">
+    <div class="cartao-cabecalho">
+      <h2 id="turma-titulo">Nova turma</h2>
+      <button type="button" class="fecha" data-fechar aria-label="Fechar">&times;</button>
+    </div>
+    <form id="form-turma" autocomplete="off">
+      <div class="grade">
+        <label class="campo">
+          <span>Ano letivo *</span>
+          <select id="turma-ano_letivo" name="ano_letivo" required></select>
+        </label>
+        <label class="campo">
+          <span>Sigla *</span>
+          <input id="turma-sigla" name="sigla" maxlength="30" required placeholder="Ex.: 5ºA">
+        </label>
+      </div>
+      <label class="campo">
+        <span>Matriz/Curso *</span>
+        <select id="turma-matriz" name="matriz" required></select>
+      </label>
+      <div class="grade">
+        <label class="campo">
+          <span>Ano de escolaridade *</span>
+          <select id="turma-ano_escolaridade" name="ano_escolaridade" required></select>
+        </label>
+        <label class="campo">
+          <span>Turno *</span>
+          <select id="turma-turno" name="turno" required>
+            <option value="Manhã">Manhã</option>
+            <option value="Tarde">Tarde</option>
+            <option value="Integral">Integral</option>
+          </select>
+        </label>
+      </div>
+      <div class="campo">
+        <span>Tipo da turma</span>
+        <div class="radio-linha">
+          <label class="opcao"><input type="radio" name="tipo_turma" value="NAI"> NAI</label>
+          <label class="opcao"><input type="radio" name="tipo_turma" value="NAF"> NAF</label>
+        </div>
+        <small class="ajuda">NAI: Nivelamento nos Anos Iniciais (3º ao 5º) · NAF: nos Anos Finais (6º ao 9º). Opcional.</small>
+      </div>
+      <div class="rodape">
+        <button type="button" class="btn" data-fechar>Cancelar</button>
+        <button type="submit" class="btn primario">Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div class="modal" id="modal-escola" hidden>
   <div class="fundo" data-fechar></div>
   <div class="cartao cartao-estreito">
@@ -357,11 +694,899 @@
   </div>
 </div>
 
+<div class="modal tela-cheia" id="modal-aluno" hidden>
+  <div class="fundo" data-fechar></div>
+  <div class="cartao cartao-largo">
+    <div class="cartao-cabecalho">
+      <h2 id="aluno-titulo">Novo aluno</h2>
+      <button type="button" class="fecha" data-fechar aria-label="Fechar">&times;</button>
+    </div>
+    <form id="form-aluno" autocomplete="off">
+
+      <fieldset class="secao">
+        <legend>Identificação</legend>
+        <div class="grade-3">
+          <label class="campo completa"><span>Nome *</span>
+            <input id="aluno-nome" name="nome" maxlength="150" required></label>
+          <label class="campo"><span>Nome afetivo</span>
+            <input name="nome_afetivo" maxlength="150"></label>
+          <label class="campo"><span>Nome social</span>
+            <input name="nome_social" maxlength="150"></label>
+          <label class="campo"><span>CPF *</span>
+            <input name="cpf" data-mask="cpf" placeholder="000.000.000-00" inputmode="numeric" required></label>
+          <label class="campo"><span>Nº do passaporte</span>
+            <input name="passaporte" maxlength="30"></label>
+          <label class="campo"><span>Data de nascimento *</span>
+            <input type="date" name="data_nascimento" required></label>
+          <label class="campo"><span>Estado civil *</span>
+            <select name="estado_civil" required>
+              <option value="Solteiro" selected>Solteiro</option>
+              <option value="Casado">Casado</option>
+              <option value="União Estável">União Estável</option>
+              <option value="Divorciado">Divorciado</option>
+              <option value="Viúvo">Viúvo</option>
+            </select></label>
+          <label class="campo"><span>Sexo *</span>
+            <select name="sexo" required>
+              <option value="" selected>—</option>
+              <option value="Masculino">Masculino</option>
+              <option value="Feminino">Feminino</option>
+            </select></label>
+        </div>
+      </fieldset>
+
+      <fieldset class="secao">
+        <legend>Filiação 1 — preferencialmente a mãe</legend>
+        <div class="grade">
+          <label class="campo"><span>Nome da Filiação 1 *</span>
+            <input id="aluno-filiacao1_nome" name="filiacao1_nome" maxlength="150" required></label>
+          <label class="campo"><span>CPF da Filiação 1</span>
+            <input id="aluno-filiacao1_cpf" name="filiacao1_cpf" data-mask="cpf" placeholder="000.000.000-00" inputmode="numeric">
+            <small class="ajuda">Obrigatório quando a filiação está preenchida.</small></label>
+          <label class="campo"><span>RG da Filiação 1</span>
+            <input id="aluno-filiacao1_rg" name="filiacao1_rg" maxlength="30"></label>
+          <label class="campo"><span>Telefone da Filiação 1</span>
+            <input id="aluno-filiacao1_telefone" name="filiacao1_telefone" data-mask="telefone" placeholder="(00) 00000-0000" inputmode="tel"></label>
+          <label class="campo"><span>Estado civil</span>
+            <select name="filiacao1_estado_civil">
+              <option value="" selected>—</option>
+              <option value="Solteiro">Solteiro</option>
+              <option value="Casado">Casado</option>
+              <option value="União Estável">União Estável</option>
+              <option value="Divorciado">Divorciado</option>
+              <option value="Viúvo">Viúvo</option>
+            </select></label>
+          <label class="campo check"><input type="checkbox" name="filiacao1_falecido"><span>Falecido</span></label>
+        </div>
+      </fieldset>
+
+      <fieldset class="secao">
+        <legend>Filiação 2</legend>
+        <div class="grade">
+          <label class="campo"><span>Nome da Filiação 2</span>
+            <input id="aluno-filiacao2_nome" name="filiacao2_nome" maxlength="150"></label>
+          <label class="campo"><span>CPF da Filiação 2</span>
+            <input id="aluno-filiacao2_cpf" name="filiacao2_cpf" data-mask="cpf" placeholder="000.000.000-00" inputmode="numeric">
+            <small class="ajuda">Obrigatório quando a filiação está preenchida.</small></label>
+          <label class="campo"><span>RG da Filiação 2</span>
+            <input id="aluno-filiacao2_rg" name="filiacao2_rg" maxlength="30"></label>
+          <label class="campo"><span>Telefone da Filiação 2</span>
+            <input id="aluno-filiacao2_telefone" name="filiacao2_telefone" data-mask="telefone" placeholder="(00) 00000-0000" inputmode="tel"></label>
+          <label class="campo"><span>Estado civil</span>
+            <select name="filiacao2_estado_civil">
+              <option value="" selected>—</option>
+              <option value="Solteiro">Solteiro</option>
+              <option value="Casado">Casado</option>
+              <option value="União Estável">União Estável</option>
+              <option value="Divorciado">Divorciado</option>
+              <option value="Viúvo">Viúvo</option>
+            </select></label>
+          <label class="campo check"><input type="checkbox" name="filiacao2_falecido"><span>Falecido</span></label>
+        </div>
+      </fieldset>
+
+      <fieldset class="secao">
+        <legend>Responsável</legend>
+        <div class="grade">
+          <label class="campo"><span>Nome do responsável *</span>
+            <input name="responsavel_nome" maxlength="150" required></label>
+          <label class="campo"><span>CPF do responsável *</span>
+            <input name="responsavel_cpf" data-mask="cpf" placeholder="000.000.000-00" inputmode="numeric" required></label>
+          <label class="campo"><span>RG do responsável</span>
+            <input id="aluno-responsavel_rg" name="responsavel_rg" maxlength="30"></label>
+          <label class="campo"><span>Estado civil do responsável</span>
+            <select name="responsavel_estado_civil">
+              <option value="" selected>—</option>
+              <option value="Solteiro">Solteiro</option>
+              <option value="Casado">Casado</option>
+              <option value="União Estável">União Estável</option>
+              <option value="Divorciado">Divorciado</option>
+              <option value="Viúvo">Viúvo</option>
+            </select></label>
+          <label class="campo"><span>Parentesco com o aluno *</span>
+            <input name="responsavel_parentesco" maxlength="60" required
+                   placeholder="Ex.: Mãe, Pai, Avó, Tutor"></label>
+          <label class="campo"><span>Telefone do responsável</span>
+            <input name="responsavel_telefone" data-mask="telefone" placeholder="(00) 00000-0000" inputmode="tel"></label>
+          <label class="campo"><span>E-mail do responsável</span>
+            <input name="responsavel_email" type="email" maxlength="120"></label>
+          <label class="campo check"><input type="checkbox" name="responsavel_falecido"><span>Falecido</span></label>
+        </div>
+      </fieldset>
+
+      <fieldset class="secao">
+        <legend>Endereço</legend>
+        <div class="grade">
+          <label class="campo"><span>CEP *</span>
+            <input id="aluno-cep" name="cep" data-mask="cep" placeholder="00000-000" inputmode="numeric" required>
+            <small class="ajuda">Ao completar o CEP o endereço é consultado e preenchido automaticamente.</small></label>
+          <label class="campo"><span>Logradouro *</span>
+            <input id="aluno-logradouro" name="logradouro" maxlength="150" required></label>
+          <label class="campo"><span>Número *</span>
+            <input id="aluno-numero" name="numero" maxlength="20" required disabled>
+            <small class="ajuda">Fica disponível após a consulta do CEP.</small></label>
+          <label class="campo"><span>Complemento</span>
+            <input name="complemento" maxlength="80"></label>
+          <label class="campo"><span>Bairro *</span>
+            <input name="bairro" maxlength="100" required></label>
+          <label class="campo"><span>Estado *</span>
+            <select id="aluno-estado" name="estado" required>
+              <option value="" selected>—</option>
+              <option value="AC">Acre</option>
+              <option value="AL">Alagoas</option>
+              <option value="AP">Amapá</option>
+              <option value="AM">Amazonas</option>
+              <option value="BA">Bahia</option>
+              <option value="CE">Ceará</option>
+              <option value="DF">Distrito Federal</option>
+              <option value="ES">Espírito Santo</option>
+              <option value="GO">Goiás</option>
+              <option value="MA">Maranhão</option>
+              <option value="MT">Mato Grosso</option>
+              <option value="MS">Mato Grosso do Sul</option>
+              <option value="MG">Minas Gerais</option>
+              <option value="PA">Pará</option>
+              <option value="PB">Paraíba</option>
+              <option value="PR">Paraná</option>
+              <option value="PE">Pernambuco</option>
+              <option value="PI">Piauí</option>
+              <option value="RJ">Rio de Janeiro</option>
+              <option value="RN">Rio Grande do Norte</option>
+              <option value="RS">Rio Grande do Sul</option>
+              <option value="RO">Rondônia</option>
+              <option value="RR">Roraima</option>
+              <option value="SC">Santa Catarina</option>
+              <option value="SP">São Paulo</option>
+              <option value="SE">Sergipe</option>
+              <option value="TO">Tocantins</option>
+            </select></label>
+          <label class="campo"><span>Cidade *</span>
+            <input id="aluno-cidade" name="cidade" list="lista-cidades" maxlength="100" required
+                   placeholder="Consulte ou digite">
+            <datalist id="lista-cidades"></datalist></label>
+          <label class="campo"><span>Zona residencial *</span>
+            <select name="zona_residencial" required>
+              <option value="" selected>—</option>
+              <option value="Urbana">Urbana</option>
+              <option value="Rural">Rural</option>
+            </select></label>
+        </div>
+      </fieldset>
+
+      <fieldset class="secao">
+        <legend>Deficiências, Transtornos e Superdotação</legend>
+        <div class="campo">
+          <span>Aluno com deficiência, transtorno ou superdotação? *</span>
+          <div class="radio-linha">
+            <label class="opcao"><input type="radio" name="tem_condicao" value="Não" checked> Não</label>
+            <label class="opcao"><input type="radio" name="tem_condicao" value="Sim"> Sim</label>
+          </div>
+        </div>
+        <div id="linha-condicoes" hidden>
+          <div class="check-grid">
+            <label class="campo check"><input type="checkbox" name="def_dv_cego"><span>Deficiência visual - cegueira</span></label>
+            <label class="campo check"><input type="checkbox" name="def_dv_baixa_visao"><span>Deficiência visual – baixa visão</span></label>
+            <label class="campo check"><input type="checkbox" name="def_surdocegueira"><span>Surdocegueira</span></label>
+            <label class="campo check"><input type="checkbox" name="def_multipla"><span>Deficiência múltipla</span></label>
+            <label class="campo check"><input type="checkbox" name="def_altas_habilidades"><span>Altas habilidades/Superdotação</span></label>
+            <label class="campo check"><input type="checkbox" name="def_da_baixa_audicao"><span>Deficiência auditiva – baixa audição</span></label>
+            <label class="campo check"><input type="checkbox" name="def_da_surdez"><span>Deficiência auditiva – surdez</span></label>
+            <label class="campo check"><input type="checkbox" name="def_fisica"><span>Deficiência física</span></label>
+            <label class="campo check"><input type="checkbox" name="def_tgd"><span>Transtornos globais do desenvolvimento (TGD)</span></label>
+            <label class="campo check"><input type="checkbox" name="def_ahd_permanente"><span>Atendimento hospitalar/domiciliar – permanente</span></label>
+            <label class="campo check"><input type="checkbox" name="def_intelectual"><span>Deficiência intelectual / mental</span></label>
+            <label class="campo check"><input type="checkbox" name="def_sindrome_genetica"><span>Síndrome genética ou adquirida</span></label>
+            <label class="campo check"><input type="checkbox" name="def_ahd_provisorio"><span>Atendimento hospitalar/domiciliar – provisório</span></label>
+            <label class="campo check"><input type="checkbox" name="def_sindrome_down"><span>Sindrome de Down</span></label>
+            <label class="campo check"><input type="checkbox" name="def_outros"><span>Outros</span></label>
+          </div>
+          <div class="grade">
+            <label class="campo completa" id="linha-def-outros" hidden><span>Descreva outros</span>
+              <input name="deficiencia_outros" maxlength="200"></label>
+            <label class="campo"><span>Código CID</span>
+              <input name="codigo_cid" maxlength="10" placeholder="Ex.: F70"></label>
+            <label class="campo completa"><span>Outros Laudos</span>
+              <textarea name="outros_laudos" rows="2" maxlength="1000"
+                placeholder="Descreva laudos ou condições que não estão nas listas"></textarea></label>
+          </div>
+        </div>
+        <div class="campo">
+          <span>O aluno apresentou laudo médico específico? *</span>
+          <div class="radio-linha">
+            <label class="opcao"><input type="radio" name="laudo_especifico" value="Não" checked> Não</label>
+            <label class="opcao"><input type="radio" name="laudo_especifico" value="Sim"> Sim</label>
+          </div>
+        </div>
+        <div class="campo">
+          <span>Apresenta laudo médico com necessidade clínica de redução de carga horária? *</span>
+          <div class="radio-linha">
+            <label class="opcao"><input type="radio" name="laudo_reducao_carga" value="Não" checked> Não</label>
+            <label class="opcao"><input type="radio" name="laudo_reducao_carga" value="Sim"> Sim</label>
+          </div>
+        </div>
+        <div class="campo">
+          <span>Com relação à Necessidade Especial, há algum acompanhamento específico? *</span>
+          <div class="radio-linha">
+            <label class="opcao"><input type="radio" name="acompanhamento_especial" value="Não" checked> Não</label>
+            <label class="opcao"><input type="radio" name="acompanhamento_especial" value="Sim"> Sim</label>
+          </div>
+        </div>
+        <div id="linha-acompanhamento" hidden>
+          <div class="grade">
+            <label class="campo"><span>Qual o tipo de acompanhamento? *</span>
+              <input name="tipo_acompanhamento" maxlength="200"></label>
+            <label class="campo"><span>Realizado em qual Instituição? *</span>
+              <input name="instituicao_acompanhamento" maxlength="200"></label>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset class="secao">
+        <legend>Dados Escolares Anteriores</legend>
+        <div class="grade">
+          <label class="campo"><span>Unidade escolar de origem</span>
+            <input id="aluno-ue_origem" name="ue_origem" maxlength="120"></label>
+          <label class="campo"><span>Município/UF de origem</span>
+            <input id="aluno-ue_municipio" name="ue_municipio" maxlength="120"></label>
+        </div>
+        <div class="campo">
+          <span>Devendo Histórico Escolar *</span>
+          <div class="radio-linha">
+            <label class="opcao"><input type="radio" name="devendo_historico" value="sim"> Sim</label>
+            <label class="opcao"><input type="radio" name="devendo_historico" value="nao"> Não</label>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset class="secao">
+        <legend>Outras informações</legend>
+        <div class="grade">
+          <label class="campo"><span>Tipo sanguíneo</span>
+            <select name="tipo_sanguineo">
+              <option value="" selected>—</option>
+              <option value="A+">A+</option>
+              <option value="A-">A-</option>
+              <option value="B+">B+</option>
+              <option value="B-">B-</option>
+              <option value="AB+">AB+</option>
+              <option value="AB-">AB-</option>
+              <option value="O+">O+</option>
+              <option value="O-">O-</option>
+            </select></label>
+          <label class="campo"><span>Nacionalidade *</span>
+            <select id="aluno-nacionalidade" name="nacionalidade" required>
+              <option value="Brasileira" selected>Brasileira</option>
+              <option value="Brasileira: nascido no exterior ou naturalizado">Brasileira: nascido no exterior ou naturalizado</option>
+              <option value="Estrangeira">Estrangeira</option>
+            </select></label>
+          <label class="campo"><span>País de origem</span>
+            <select id="aluno-pais_origem" name="pais_origem">
+              <option value="Brasil" selected>Brasil</option>
+            </select>
+            <small class="ajuda">Obrigatório quando a nacionalidade é estrangeira.</small></label>
+          <label class="campo"><span>Estado de origem *</span>
+            <select id="aluno-estado_origem" name="estado_origem" required>
+              <option value="" selected>—</option>
+              <option value="AC">Acre</option>
+              <option value="AL">Alagoas</option>
+              <option value="AP">Amapá</option>
+              <option value="AM">Amazonas</option>
+              <option value="BA">Bahia</option>
+              <option value="CE">Ceará</option>
+              <option value="DF">Distrito Federal</option>
+              <option value="ES">Espírito Santo</option>
+              <option value="GO">Goiás</option>
+              <option value="MA">Maranhão</option>
+              <option value="MT">Mato Grosso</option>
+              <option value="MS">Mato Grosso do Sul</option>
+              <option value="MG">Minas Gerais</option>
+              <option value="PA">Pará</option>
+              <option value="PB">Paraíba</option>
+              <option value="PR">Paraná</option>
+              <option value="PE">Pernambuco</option>
+              <option value="PI">Piauí</option>
+              <option value="RJ">Rio de Janeiro</option>
+              <option value="RN">Rio Grande do Norte</option>
+              <option value="RS">Rio Grande do Sul</option>
+              <option value="RO">Rondônia</option>
+              <option value="RR">Roraima</option>
+              <option value="SC">Santa Catarina</option>
+              <option value="SP">São Paulo</option>
+              <option value="SE">Sergipe</option>
+              <option value="TO">Tocantins</option>
+            </select></label>
+          <label class="campo"><span>Naturalidade *</span>
+            <input id="aluno-naturalidade" name="naturalidade" list="lista-naturalidades" maxlength="100" required
+                   placeholder="Consulte ou digite">
+            <datalist id="lista-naturalidades"></datalist></label>
+          <label class="campo"><span>Raça/cor *</span>
+            <select name="raca" required>
+              <option value="" selected>—</option>
+              <option value="Parda">Parda</option>
+              <option value="Preta">Preta</option>
+              <option value="Branca">Branca</option>
+              <option value="Indígena">Indígena</option>
+              <option value="Amarela">Amarela</option>
+              <option value="Não declarada">Não declarada</option>
+            </select></label>
+        </div>
+      </fieldset>
+
+      <fieldset class="secao">
+        <legend>RG</legend>
+        <div class="grade">
+          <label class="campo"><span>Número do RG</span>
+            <input name="rg_numero" maxlength="30"></label>
+          <label class="campo"><span>Estado emissor</span>
+            <select name="rg_estado_emissor">
+              <option value="" selected>—</option>
+              <option value="AC">Acre</option>
+              <option value="AL">Alagoas</option>
+              <option value="AP">Amapá</option>
+              <option value="AM">Amazonas</option>
+              <option value="BA">Bahia</option>
+              <option value="CE">Ceará</option>
+              <option value="DF">Distrito Federal</option>
+              <option value="ES">Espírito Santo</option>
+              <option value="GO">Goiás</option>
+              <option value="MA">Maranhão</option>
+              <option value="MT">Mato Grosso</option>
+              <option value="MS">Mato Grosso do Sul</option>
+              <option value="MG">Minas Gerais</option>
+              <option value="PA">Pará</option>
+              <option value="PB">Paraíba</option>
+              <option value="PR">Paraná</option>
+              <option value="PE">Pernambuco</option>
+              <option value="PI">Piauí</option>
+              <option value="RJ">Rio de Janeiro</option>
+              <option value="RN">Rio Grande do Norte</option>
+              <option value="RS">Rio Grande do Sul</option>
+              <option value="RO">Rondônia</option>
+              <option value="RR">Roraima</option>
+              <option value="SC">Santa Catarina</option>
+              <option value="SP">São Paulo</option>
+              <option value="SE">Sergipe</option>
+              <option value="TO">Tocantins</option>
+            </select></label>
+          <label class="campo"><span>Órgão emissor</span>
+            <select name="rg_orgao_emissor">
+              <option value="" selected>—</option>
+              <option value="SSP">SSP</option>
+              <option value="SPTC">SPTC</option>
+              <option value="DETRAN">DETRAN</option>
+              <option value="CRM">CRM (Médicos)</option>
+              <option value="CRMV">CRMV (Veterinários)</option>
+              <option value="OAB">OAB (Advogados)</option>
+              <option value="CRA">CRA (Administradores)</option>
+              <option value="CRC">CRC (Contadores)</option>
+              <option value="CRN">CRN (Nutricionistas)</option>
+              <option value="CRE">CRE (Educação Física)</option>
+              <option value="CREA">CREA (Engenheiros)</option>
+              <option value="COREN">COREN (Enfermeiros)</option>
+              <option value="CRF">CRF (Farmacêuticos)</option>
+              <option value="CRP">CRP (Psicólogos)</option>
+              <option value="CRO">CRO (Dentistas)</option>
+              <option value="Outro">Outro</option>
+            </select></label>
+          <label class="campo"><span>Data de emissão</span>
+            <input type="date" name="rg_data_emissao"></label>
+        </div>
+      </fieldset>
+
+      <fieldset class="secao">
+        <legend>Título de Eleitor</legend>
+        <div class="grade">
+          <label class="campo"><span>Nº do título</span>
+            <input name="titulo_numero" maxlength="20"></label>
+          <label class="campo"><span>Zona</span>
+            <input name="titulo_zona" data-mask="digitos" maxlength="10" inputmode="numeric"></label>
+          <label class="campo"><span>Seção</span>
+            <input name="titulo_secao" data-mask="digitos" maxlength="10" inputmode="numeric"></label>
+          <label class="campo"><span>Data de emissão</span>
+            <input type="date" name="titulo_data_emissao"></label>
+          <label class="campo"><span>Estado emissor</span>
+            <select name="titulo_estado_emissor">
+              <option value="" selected>—</option>
+              <option value="AC">Acre</option>
+              <option value="AL">Alagoas</option>
+              <option value="AP">Amapá</option>
+              <option value="AM">Amazonas</option>
+              <option value="BA">Bahia</option>
+              <option value="CE">Ceará</option>
+              <option value="DF">Distrito Federal</option>
+              <option value="ES">Espírito Santo</option>
+              <option value="GO">Goiás</option>
+              <option value="MA">Maranhão</option>
+              <option value="MT">Mato Grosso</option>
+              <option value="MS">Mato Grosso do Sul</option>
+              <option value="MG">Minas Gerais</option>
+              <option value="PA">Pará</option>
+              <option value="PB">Paraíba</option>
+              <option value="PR">Paraná</option>
+              <option value="PE">Pernambuco</option>
+              <option value="PI">Piauí</option>
+              <option value="RJ">Rio de Janeiro</option>
+              <option value="RN">Rio Grande do Norte</option>
+              <option value="RS">Rio Grande do Sul</option>
+              <option value="RO">Rondônia</option>
+              <option value="RR">Roraima</option>
+              <option value="SC">Santa Catarina</option>
+              <option value="SP">São Paulo</option>
+              <option value="SE">Sergipe</option>
+              <option value="TO">Tocantins</option>
+            </select></label>
+        </div>
+      </fieldset>
+
+      <fieldset class="secao">
+        <legend>Certidão Civil</legend>
+        <div class="grade">
+          <label class="campo"><span>Tipo de certidão *</span>
+            <select name="certidao_tipo" required>
+              <option value="Nascimento" selected>Nascimento</option>
+              <option value="Casamento">Casamento</option>
+            </select></label>
+          <label class="campo"><span>Cartório</span>
+            <input name="certidao_cartorio" maxlength="160" value="RCPN 1º Subdistrito do 1º Distrito" placeholder="Busque pelo nome do cartório ou cidade">
+            <small class="ajuda">Digite o nome para localizar o cartório.</small></label>
+          <label class="campo"><span>Nº do termo</span>
+            <input name="certidao_termo" maxlength="30"></label>
+          <label class="campo"><span>Folha</span>
+            <input name="certidao_folha" maxlength="20"></label>
+          <label class="campo"><span>Livro</span>
+            <input name="certidao_livro" maxlength="20"></label>
+          <label class="campo"><span>Data de emissão</span>
+            <input type="date" name="certidao_data_emissao"></label>
+          <label class="campo"><span>Matrícula</span>
+            <input name="certidao_matricula" data-mask="certidao" maxlength="41" inputmode="numeric" placeholder="089516 50 55 2018 1 00049 145 0014545 75"></label>
+        </div>
+      </fieldset>
+
+      <fieldset class="secao">
+        <legend>Saúde</legend>
+        <div class="grade">
+          <label class="campo"><span>Nº do Cartão do SUS</span>
+            <input name="cartao_sus" data-mask="sus" maxlength="19" inputmode="numeric" placeholder="704 7067 7172 6836"></label>
+          <label class="campo check"><input type="checkbox" id="aluno-alergico" name="alergico"><span>O aluno é alérgico</span></label>
+          <label class="campo" id="linha-alergia" hidden><span>Tipo de alergia</span>
+            <input id="aluno-alergia_tipo" name="alergia_tipo" maxlength="120"></label>
+          <label class="campo check"><input type="checkbox" id="aluno-beneficio_social" name="beneficio_social"><span>Recebe benefício social</span></label>
+          <label class="campo" id="linha-beneficio" hidden><span>Qual benefício</span>
+            <select id="aluno-beneficio_tipo" name="beneficio_tipo">
+              <option value="" selected>—</option>
+              <option value="Bolsa Família">Bolsa Família</option>
+              <option value="Pé de Meia">Pé de Meia</option>
+              <option value="BPC/LOAS">BPC/LOAS</option>
+              <option value="Outro benefício federal">Outro benefício federal</option>
+            </select></label>
+        </div>
+      </fieldset>
+
+      <fieldset class="secao">
+        <legend>Dados do MEC</legend>
+        <div class="grade">
+          <label class="campo"><span>Código Educacenso</span>
+            <input name="educacenso" data-mask="digitos" maxlength="20" inputmode="numeric"></label>
+          <label class="campo"><span>NIS</span>
+            <input name="nis" data-mask="digitos" maxlength="11" inputmode="numeric" placeholder="00000000000"></label>
+        </div>
+      </fieldset>
+
+      <fieldset class="secao">
+        <legend>Transporte Escolar</legend>
+        <div class="campo">
+          <span>O(a) aluno(a) necessita de transporte escolar? *</span>
+          <div class="radio-linha">
+            <label class="opcao"><input type="radio" name="transporte_escolar" value="Não" checked> Não</label>
+            <label class="opcao"><input type="radio" name="transporte_escolar" value="Sim"> Sim</label>
+          </div>
+        </div>
+        <div id="linha-transporte" hidden>
+          <div class="grade">
+            <label class="campo"><span>Poder público responsável</span>
+              <select name="transporte_poder">
+                <option value="" selected>—</option>
+                <option value="Municipal">Municipal</option>
+                <option value="Estadual">Estadual</option>
+              </select></label>
+            <label class="campo"><span>Tipo de veículo utilizado</span>
+              <select name="transporte_veiculo">
+                <option value="" selected>—</option>
+                <optgroup label="Rodoviário">
+                  <option value="Vans/WV">Vans/WV</option>
+                  <option value="Kombi Micro-Ônibus">Kombi Micro-Ônibus</option>
+                  <option value="Ônibus">Ônibus</option>
+                  <option value="Bicicleta">Bicicleta</option>
+                  <option value="Tração Animal">Tração Animal</option>
+                  <option value="Outro tipo de veículo rodoviário">Outro tipo de veículo rodoviário</option>
+                </optgroup>
+                <optgroup label="Aquaviário">
+                  <option value="Capacidade de até 5 alunos">Capacidade de até 5 alunos</option>
+                  <option value="Capacidade entre 5 a 15 alunos">Capacidade entre 5 a 15 alunos</option>
+                  <option value="Capacidade entre 15 e 35 alunos">Capacidade entre 15 e 35 alunos</option>
+                  <option value="Capacidade acima de 35 alunos">Capacidade acima de 35 alunos</option>
+                </optgroup>
+                <optgroup label="Ferroviário">
+                  <option value="Trem/Metrô">Trem/Metrô</option>
+                </optgroup>
+              </select></label>
+            <label class="campo"><span>Transporte adaptado? *</span>
+              <div class="radio-linha">
+                <label class="opcao"><input type="radio" name="transporte_adaptado" value="Não" checked> Não</label>
+                <label class="opcao"><input type="radio" name="transporte_adaptado" value="Sim"> Sim</label>
+              </div></label>
+            <label class="campo"><span>Quantos quilômetros têm da residência do aluno até a escola?</span>
+              <input name="transporte_km" inputmode="decimal" maxlength="10" placeholder="Ex.: 3,5"></label>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset class="secao">
+        <legend>Autorização de imagem</legend>
+        <div class="campo">
+          <span>Autoriza o uso da imagem do aluno em peças publicitárias, cartazes e/ou redes sociais? *</span>
+          <div class="radio-linha">
+            <label class="opcao"><input type="radio" name="autoriza_imagem" value="Não" checked> Não</label>
+            <label class="opcao"><input type="radio" name="autoriza_imagem" value="Sim"> Sim</label>
+          </div>
+        </div>
+      </fieldset>
+
+      <div class="rodape">
+        <button type="button" class="btn" data-fechar>Cancelar</button>
+        <button type="submit" class="btn primario">Salvar aluno</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal tela-cheia" id="modal-funcionario" hidden>
+  <div class="fundo" data-fechar></div>
+  <div class="cartao">
+    <div class="cartao-cabecalho">
+      <h2 id="funcionario-titulo">Novo funcionário</h2>
+      <button type="button" class="fecha" data-fechar aria-label="Fechar">&times;</button>
+    </div>
+    <form id="form-funcionario" autocomplete="off">
+
+      <fieldset class="secao">
+        <legend>Identificação</legend>
+        <div class="grade-3">
+          <label class="campo"><span>Matrícula</span>
+            <input name="matricula" maxlength="30"></label>
+          <label class="campo completa"><span>Nome *</span>
+            <input id="func-nome" name="nome" maxlength="150" required></label>
+          <label class="campo"><span>CPF *</span>
+            <input name="cpf" data-mask="cpf" placeholder="000.000.000-00" inputmode="numeric" required></label>
+          <label class="campo"><span>Nº do passaporte</span>
+            <input name="passaporte" maxlength="30"></label>
+          <label class="campo"><span>Nacionalidade *</span>
+            <select id="func-nacionalidade" name="nacionalidade" required>
+              <option value="Brasileiro Nato" selected>Brasileiro Nato</option>
+              <option value="Brasileiro Naturalizado">Brasileiro Naturalizado</option>
+              <option value="Equiparado">Equiparado</option>
+              <option value="Estrangeiro">Estrangeiro</option>
+            </select></label>
+          <label class="campo"><span>Sexo *</span>
+            <select name="sexo" required>
+              <option value="" selected>—</option>
+              <option value="Masculino">Masculino</option>
+              <option value="Feminino">Feminino</option>
+            </select></label>
+          <label class="campo"><span>Cor/Raça *</span>
+            <select name="raca" required>
+              <option value="" selected>—</option>
+              <option value="Parda">Parda</option>
+              <option value="Preta">Preta</option>
+              <option value="Branca">Branca</option>
+              <option value="Indígena">Indígena</option>
+              <option value="Amarela">Amarela</option>
+              <option value="Não declarada">Não declarada</option>
+            </select></label>
+          <label class="campo"><span>Data de nascimento *</span>
+            <input type="date" name="data_nascimento" required></label>
+          <label class="campo"><span>Estado civil *</span>
+            <select name="estado_civil" required>
+              <option value="Solteiro" selected>Solteiro</option>
+              <option value="Casado">Casado</option>
+              <option value="União Estável">União Estável</option>
+              <option value="Divorciado">Divorciado</option>
+              <option value="Viúvo">Viúvo</option>
+            </select></label>
+          <label class="campo"><span>Nome do pai</span>
+            <input name="nome_pai" maxlength="150"></label>
+          <label class="campo"><span>Nome da mãe</span>
+            <input name="nome_mae" maxlength="150"></label>
+          <label class="campo"><span>Naturalidade *</span>
+            <input id="func-naturalidade" name="naturalidade" maxlength="120" list="lista-naturalidades-func"
+                   placeholder="Campos dos Goytacazes / RJ" required>
+            <datalist id="lista-naturalidades-func"></datalist></label>
+        </div>
+      </fieldset>
+
+      <fieldset class="secao">
+        <legend>RG</legend>
+        <div class="grade-3">
+          <label class="campo"><span>Número do RG</span>
+            <input name="rg_numero" maxlength="30"></label>
+          <label class="campo"><span>Estado emissor</span>
+            <select name="rg_estado_emissor">
+              <option value="" selected>—</option>
+            </select></label>
+          <label class="campo"><span>Órgão emissor</span>
+            <select name="rg_orgao_emissor">
+              <option value="" selected>—</option>
+              <option value="SSP-RJ">SSP-RJ</option>
+              <option value="SSP/DETRAN-RJ">SSP/DETRAN-RJ</option>
+              <option value="Polícia Federal">Polícia Federal</option>
+              <option value="CRM">CRM</option>
+              <option value="OAB">OAB</option>
+              <option value="CRN">CRN</option>
+              <option value="CRESS">CRESS</option>
+              <option value="CRC">CRC</option>
+              <option value="CREA">CREA</option>
+              <option value="CRF">CRF</option>
+              <option value="COREN">COREN</option>
+              <option value="CRP">CRP</option>
+              <option value="CRSS">CRSS</option>
+              <option value="Outro conselho regional">Outro conselho regional</option>
+              <option value="Outro órgão">Outro órgão</option>
+            </select></label>
+          <label class="campo"><span>Data de emissão</span>
+            <input type="date" name="rg_data_emissao"></label>
+        </div>
+      </fieldset>
+
+      <fieldset class="secao">
+        <legend>Carteira Profissional</legend>
+        <div class="grade">
+          <label class="campo"><span>Número</span>
+            <input name="cp_numero" maxlength="20"></label>
+          <label class="campo"><span>Série</span>
+            <input name="cp_serie" maxlength="10"></label>
+        </div>
+      </fieldset>
+
+      <fieldset class="secao">
+        <legend>Título de Eleitor</legend>
+        <div class="grade-3">
+          <label class="campo"><span>Número</span>
+            <input name="titulo_numero" maxlength="20" inputmode="numeric"></label>
+          <label class="campo"><span>Zona</span>
+            <input name="titulo_zona" maxlength="10" inputmode="numeric"></label>
+          <label class="campo"><span>Seção</span>
+            <input name="titulo_secao" maxlength="10" inputmode="numeric"></label>
+        </div>
+      </fieldset>
+
+      <fieldset class="secao">
+        <legend>Endereço</legend>
+        <div class="grade-3">
+          <label class="campo"><span>CEP *</span>
+            <input id="func-cep" name="cep" data-mask="cep" placeholder="00000-000" inputmode="numeric" required></label>
+          <label class="campo"><span>Logradouro *</span>
+            <input id="func-logradouro" name="logradouro" maxlength="150" required></label>
+          <label class="campo"><span>Número *</span>
+            <input id="func-numero" name="numero" maxlength="20" required disabled></label>
+          <label class="campo"><span>Complemento</span>
+            <input name="complemento" maxlength="80"></label>
+          <label class="campo"><span>Bairro *</span>
+            <input name="bairro" maxlength="100" required></label>
+          <label class="campo"><span>Estado</span>
+            <select name="estado" id="func-estado" required>
+              <option value="" selected>—</option>
+            </select></label>
+          <label class="campo"><span>Cidade *</span>
+            <input id="func-cidade" name="cidade" maxlength="100" list="lista-cidades-func" required>
+            <datalist id="lista-cidades-func"></datalist></label>
+          <label class="campo"><span>Zona residencial *</span>
+            <select name="zona_residencial" required>
+              <option value="" selected>—</option>
+              <option value="Urbana">Urbana</option>
+              <option value="Rural">Rural</option>
+            </select></label>
+        </div>
+      </fieldset>
+
+      <fieldset class="secao">
+        <legend>Dados para contato</legend>
+        <div class="grade">
+          <label class="campo"><span>E-mail</span>
+            <input type="email" name="email" maxlength="120"></label>
+          <label class="campo"><span>Telefone</span>
+            <input name="telefone" data-mask="telefone" placeholder="(00) 00000-0000" inputmode="tel"></label>
+        </div>
+      </fieldset>
+
+      <fieldset class="secao">
+        <legend>Dados sobre a Função</legend>
+        <div class="grade-3">
+          <label class="campo"><span>Cargo *</span>
+            <input name="cargo" maxlength="100" required></label>
+          <label class="campo"><span>Função</span>
+            <input name="funcao" maxlength="100"></label>
+          <label class="campo"><span>Data de admissão</span>
+            <input type="date" name="data_admissao"></label>
+          <label class="campo"><span>Vínculo empregatício</span>
+            <select name="vinculo_empregaticio">
+              <option value="" selected>—</option>
+              <option value="Estatutário">Estatutário</option>
+              <option value="DAS">DAS</option>
+              <option value="RPA">RPA</option>
+              <option value="PSS">PSS</option>
+            </select></label>
+          <label class="campo"><span>Lotação</span>
+            <input name="lotacao" maxlength="120"></label>
+          <div class="campo">
+            <span>Acumulação de Cargo</span>
+            <div class="radio-linha">
+              <label class="opcao"><input type="radio" name="acumulacao_cargo" value="Não" checked> Não</label>
+              <label class="opcao"><input type="radio" name="acumulacao_cargo" value="Sim"> Sim</label>
+            </div>
+          </div>
+          <div class="campo completa" id="linha-acum" hidden>
+            <span>Acumulação de Cargo — dados complementares *</span>
+            <div class="grade-3">
+              <label class="campo"><span>Cargo *</span>
+                <input name="acum_cargo" maxlength="100"></label>
+              <label class="campo"><span>Função *</span>
+                <input name="acum_funcao" maxlength="100"></label>
+              <label class="campo"><span>Matrícula *</span>
+                <input name="acum_matricula" maxlength="30"></label>
+              <label class="campo"><span>Local *</span>
+                <input name="acum_local" maxlength="120"></label>
+            </div>
+          </div>
+          <label class="campo completa"><span>Lotações anteriores / local e período</span>
+            <textarea name="lotacoes_anteriores" rows="3" maxlength="2000"
+              placeholder="Deverá listar as Secretarias/ou Escolas que exerceu alguma função seguido do período trabalhado."></textarea>
+            <small class="ajuda">Deverá listar as Secretarias/ou Escolas que exerceu alguma função seguido do período trabalhado.</small></label>
+        </div>
+      </fieldset>
+
+      <fieldset class="secao">
+        <legend>Dados de Formação</legend>
+        <div class="grade">
+          <label class="campo"><span>Maior nível de escolaridade concluído</span>
+            <select name="escolaridade">
+              <option value="" selected>—</option>
+              <option value="Fundamental incompleto">Fundamental incompleto</option>
+              <option value="Fundamental completo">Fundamental completo</option>
+              <option value="Médio incompleto">Médio incompleto</option>
+              <option value="Médio completo">Médio completo</option>
+              <option value="Superior incompleto">Superior incompleto</option>
+              <option value="Superior completo">Superior completo</option>
+              <option value="Especialização">Especialização</option>
+              <option value="Mestrado">Mestrado</option>
+              <option value="Doutorado">Doutorado</option>
+            </select></label>
+          <label class="campo"><span>Tipo de ensino médio cursado</span>
+            <select name="tipo_ensino_medio">
+              <option value="" selected>—</option>
+              <option value="Ensino Médio Tradicional">Ensino Médio Tradicional</option>
+              <option value="Ensino Médio Integrado (Técnico)">Ensino Médio Integrado (Técnico)</option>
+              <option value="Normal/Magistério">Normal/Magistério</option>
+              <option value="EJA - Ensino Médio">EJA - Ensino Médio</option>
+              <option value="Não cursou o Ensino Médio">Não cursou o Ensino Médio</option>
+            </select></label>
+        </div>
+        <div class="campo">
+          <span>Outros cursos específicos (formação continuada com no mínimo 80 horas)</span>
+          <div class="check-grid">
+            <label class="campo check"><input type="checkbox" name="cursos" value="Creche (0 a 3 anos)"> Creche (0 a 3 anos)</label>
+            <label class="campo check"><input type="checkbox" name="cursos" value="Pré-escola (4 e 5 anos)"> Pré-escola (4 e 5 anos)</label>
+            <label class="campo check"><input type="checkbox" name="cursos" value="Alfabetização"> Alfabetização</label>
+            <label class="campo check"><input type="checkbox" name="cursos" value="Anos iniciais do ensino fundamental"> Anos iniciais do ensino fundamental</label>
+            <label class="campo check"><input type="checkbox" name="cursos" value="Anos finais do ensino fundamental"> Anos finais do ensino fundamental</label>
+            <label class="campo check"><input type="checkbox" name="cursos" value="Ensino médio"> Ensino médio</label>
+            <label class="campo check"><input type="checkbox" name="cursos" value="Educação de jovens e adultos"> Educação de jovens e adultos</label>
+            <label class="campo check"><input type="checkbox" name="cursos" value="Educação especial"> Educação especial</label>
+            <label class="campo check"><input type="checkbox" name="cursos" value="Educação indígena"> Educação indígena</label>
+            <label class="campo check"><input type="checkbox" name="cursos" value="Educação do campo"> Educação do campo</label>
+            <label class="campo check"><input type="checkbox" name="cursos" value="Educação ambiental"> Educação ambiental</label>
+            <label class="campo check"><input type="checkbox" name="cursos" value="Educação em direitos humanos"> Educação em direitos humanos</label>
+            <label class="campo check"><input type="checkbox" name="cursos" value="Educação bilíngue de surdos"> Educação bilíngue de surdos</label>
+            <label class="campo check"><input type="checkbox" name="cursos" value="Educação e tecnologia de informação e comunicação (TIC)"> Educação e tecnologia de informação e comunicação (TIC)</label>
+            <label class="campo check"><input type="checkbox" name="cursos" value="Educação integral em tempo integral"> Educação integral em tempo integral</label>
+            <label class="campo check"><input type="checkbox" name="cursos" value="Gênero e diversidade sexual"> Gênero e diversidade sexual</label>
+            <label class="campo check"><input type="checkbox" name="cursos" value="Direitos da criança e do adolescente"> Direitos da criança e do adolescente</label>
+            <label class="campo check"><input type="checkbox" name="cursos" value="Educação para as relações étnico-raciais e história e cultura afro-brasileira e africana"> Educação para as relações étnico-raciais e história e cultura afro-brasileira e africana</label>
+            <label class="campo check"><input type="checkbox" name="cursos" value="Gestor escolar"> Gestor escolar</label>
+            <label class="campo check"><input type="checkbox" name="cursos" value="Outros"> Outros</label>
+            <label class="campo check"><input type="checkbox" name="cursos" value="Nenhum" id="func-curso-nenhum"> Nenhum</label>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset class="secao">
+        <legend>Situação</legend>
+        <div class="grade">
+          <div class="campo">
+            <span>Status *</span>
+            <div class="radio-linha">
+              <label class="opcao"><input type="radio" name="status" value="ativo" checked> Ativo</label>
+              <label class="opcao"><input type="radio" name="status" value="inativo"> Inativo</label>
+            </div>
+          </div>
+          <label class="campo" id="linha-data-inativacao" hidden>
+            <span>Data de inativação *</span>
+            <input type="date" name="data_inativacao">
+          </label>
+        </div>
+      </fieldset>
+
+      <div class="rodape">
+        <button type="button" class="btn" data-fechar>Cancelar</button>
+        <button type="submit" class="btn primario">Salvar funcionário</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal" id="modal-alocacao" hidden>
+  <div class="fundo" data-fechar></div>
+  <div class="cartao cartao-alocacao">
+    <div class="cartao-cabecalho">
+      <h2 id="alocacao-titulo">Alocar professores</h2>
+      <button type="button" class="fecha" data-fechar aria-label="Fechar">&times;</button>
+    </div>
+    <p class="secundario" id="alocacao-resumo" style="margin-top:0"></p>
+    <div id="alocacao-lista"></div>
+    <form id="form-alocacao" autocomplete="off">
+      <div class="grade">
+        <label class="campo">
+          <span>Professor *</span>
+          <select id="alocacao-professor" name="professor" required></select>
+        </label>
+        <div class="campo">
+          <span>Situação</span>
+          <div class="radio-linha">
+            <label class="opcao"><input type="radio" name="alocacao_situacao" value="1" checked> Ativo</label>
+            <label class="opcao"><input type="radio" name="alocacao_situacao" value="0"> Inativo</label>
+          </div>
+        </div>
+        <label class="campo">
+          <span>Data de início *</span>
+          <input type="date" id="alocacao-data-inicio" name="data_inicio" required>
+        </label>
+        <label class="campo">
+          <span>Data de término *</span>
+          <input type="date" id="alocacao-data-fim" name="data_fim" required>
+        </label>
+      </div>
+      <div class="rodape">
+        <button type="button" class="btn" data-fechar>Fechar</button>
+        <button type="submit" class="btn primario">Alocar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div class="modal" id="modal-excluir" hidden>
   <div class="fundo" data-fechar></div>
   <div class="cartao cartao-estreito">
     <div class="cartao-cabecalho">
-      <h2>Excluir pedido</h2>
+      <h2 id="excluir-titulo">Excluir pedido</h2>
       <button type="button" class="fecha" data-fechar aria-label="Fechar">&times;</button>
     </div>
     <p class="resumo" id="excluir-resumo"></p>
@@ -377,6 +1602,64 @@
   </div>
 </div>
 
+<div class="modal" id="modal-senha" hidden>
+  <div class="fundo" data-fechar></div>
+  <div class="cartao cartao-estreito">
+    <div class="cartao-cabecalho">
+      <h2>Trocar minha senha</h2>
+      <button type="button" class="fecha" data-fechar aria-label="Fechar">&times;</button>
+    </div>
+    <form id="form-senha" novalidate>
+      <div class="grade">
+        <label class="campo">
+          <span>Senha atual *</span>
+          <input type="password" id="senha-atual" name="senha_atual" autocomplete="current-password" required>
+        </label>
+        <label class="campo">
+          <span>Nova senha *</span>
+          <input type="password" id="senha-nova" name="senha" autocomplete="new-password" required>
+          <small>Mínimo de 6 caracteres.</small>
+        </label>
+        <label class="campo">
+          <span>Confirmar nova senha *</span>
+          <input type="password" id="senha-nova2" name="senha_confirmacao" autocomplete="new-password" required>
+          <small>Digite a mesma senha novamente.</small>
+        </label>
+      </div>
+      <div class="caixa-erro" id="senha-erro" hidden></div>
+      <p class="ajuda">Ao trocar, as outras sessões abertas com este usuário serão encerradas.</p>
+      <div class="rodape">
+        <button type="button" class="btn" data-fechar>Cancelar</button>
+        <button type="submit" class="btn primario" id="btn-salvar-senha">Salvar nova senha</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal" id="modal-entrega-devendo" hidden>
+  <div class="fundo" data-fechar></div>
+  <div class="cartao cartao-estreito">
+    <div class="cartao-cabecalho">
+      <h2>Registrar entrega do histórico</h2>
+      <button type="button" class="fecha" data-fechar aria-label="Fechar">&times;</button>
+    </div>
+    <p class="resumo" id="entrega-devendo-resumo"></p>
+    <form id="form-entrega-devendo" novalidate>
+      <div class="grade">
+        <label class="campo"><span>Data da entrega na secretaria *</span>
+          <input type="date" id="entrega-devendo-data" name="data_entrega" required>
+          <small>Informe a data em que o histórico foi recebido.</small>
+        </label>
+      </div>
+      <div class="caixa-erro" id="entrega-devendo-erro" hidden></div>
+      <div class="rodape">
+        <button type="button" class="btn" data-fechar>Cancelar</button>
+        <button type="submit" class="btn primario" id="btn-confirmar-entrega-devendo">Registrar entrega</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div class="modal" id="modal-pdf-viewer" hidden>
   <div class="fundo" data-fechar></div>
   <div class="cartao cartao-largo">
@@ -388,6 +1671,108 @@
     <div class="rodape">
       <button type="button" class="btn" data-fechar>Fechar</button>
     </div>
+  </div>
+</div>
+
+<div class="modal" id="modal-ver" hidden>
+  <div class="fundo" data-fechar></div>
+  <div class="cartao cartao-visualizacao">
+    <div class="cartao-cabecalho">
+      <h2 id="ver-titulo">Visualizar cadastro</h2>
+      <div class="cabecalho-direita">
+        <div id="ver-acoes" class="cabecalho-acoes" hidden></div>
+        <button type="button" class="fecha" data-fechar aria-label="Fechar">&times;</button>
+      </div>
+    </div>
+    <div id="ver-corpo" class="lista-detalhes"></div>
+    <div class="rodape">
+      <button type="button" class="btn" data-fechar>Fechar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modal-transferencia" hidden>
+  <div class="fundo" data-fechar></div>
+  <div class="cartao cartao-largo">
+    <div class="cartao-cabecalho">
+      <h2 id="transferencia-titulo">Transferência</h2>
+      <button type="button" class="fecha" data-fechar aria-label="Fechar">&times;</button>
+    </div>
+    <form id="form-transferencia" autocomplete="off">
+      <div class="resumo-acao" id="transferencia-resumo"></div>
+      <div class="grade">
+        <label class="campo">
+          <span>Tipo de transferência *</span>
+          <select id="transferencia-tipo" name="tipo" required>
+            <option value="transferido_intercampus">Transferência Intercampus</option>
+            <option value="transferido_externo">Transferência Externa</option>
+          </select>
+        </label>
+        <label class="campo">
+          <span>Data da transferência *</span>
+          <input type="date" id="transferencia-data" name="data" required>
+        </label>
+        <label class="campo">
+          <span>Unidade escolar de destino *</span>
+          <input id="transferencia-destino" name="destino" maxlength="150" required
+                 placeholder="Nome da unidade escolar de destino">
+        </label>
+        <label class="campo completa">
+          <span>Motivo da transferência</span>
+          <textarea id="transferencia-motivo" name="motivo" maxlength="500"
+                    placeholder="Descreva o motivo da transferência"></textarea>
+        </label>
+      </div>
+      <div class="rodape">
+        <button type="button" class="btn" data-fechar>Cancelar</button>
+        <button type="submit" class="btn primario">Confirmar transferência</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal" id="modal-declaracao" hidden>
+  <div class="fundo" data-fechar></div>
+  <div class="cartao cartao-largo">
+    <div class="cartao-cabecalho">
+      <h2 id="declaracao-titulo">Emitir Declaração</h2>
+      <button type="button" class="fecha" data-fechar aria-label="Fechar">&times;</button>
+    </div>
+    <form id="form-declaracao" autocomplete="off">
+      <div class="resumo-acao" id="declaracao-resumo"></div>
+      <label class="campo">
+        <span>Tipo de declaração *</span>
+        <select id="declaracao-tipo" name="tipo">
+          <option value="">Selecione o tipo...</option>
+          <option value="comprovacao">Comprovação de Escolaridade</option>
+          <option value="transferencia">Transferência</option>
+        </select>
+      </label>
+      <div class="campo" id="declaracao-situacao-campo" hidden>
+        <span>Situação do Aluno *</span>
+        <div class="radio-linha quebra" id="declaracao-situacao-opcoes"></div>
+      </div>
+      <div class="campo" id="declaracao-final-campo" hidden>
+        <span>Situação Final *</span>
+        <div class="radio-linha quebra" id="declaracao-final-opcoes">
+          <label class="opcao"><input type="radio" name="declaracao_final" value="aprovado"> Aprovado</label>
+          <label class="opcao"><input type="radio" name="declaracao_final" value="em_continuidade"> Em Continuidade de Estudos</label>
+          <label class="opcao"><input type="radio" name="declaracao_final" value="reclassificado"> Reprovado por Frequência (Reclassificado)</label>
+          <label class="opcao"><input type="radio" name="declaracao_final" value="reprovado"> Reprovado</label>
+          <label class="opcao"><input type="radio" name="declaracao_final" value="reprovado_freq"> Reprovado por Frequência</label>
+          <label class="opcao"><input type="radio" name="declaracao_final" value="transferido"> Transferido</label>
+          <label class="opcao"><input type="radio" name="declaracao_final" value="deixou"> Deixou de Frequentar</label>
+        </div>
+        <label class="campo">
+          <span>Ano Letivo *</span>
+          <select id="declaracao-ano" name="ano_letivo"></select>
+        </label>
+      </div>
+      <div class="rodape">
+        <button type="button" class="btn" data-fechar>Cancelar</button>
+        <button type="submit" class="btn primario">Emitir Declaração</button>
+      </div>
+    </form>
   </div>
 </div>
 

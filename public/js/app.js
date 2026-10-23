@@ -2,15 +2,41 @@
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
+  const MARCAS_DEFICIENCIA = {
+    dv_cego: 'Deficiência visual - cegueira',
+    dv_baixa_visao: 'Deficiência visual – baixa visão',
+    surdocegueira: 'Surdocegueira',
+    multipla: 'Deficiência múltipla',
+    altas_habilidades: 'Altas habilidades/Superdotação',
+    da_baixa_audicao: 'Deficiência auditiva – baixa audição',
+    da_surdez: 'Deficiência auditiva – surdez',
+    fisica: 'Deficiência física',
+    tgd: 'Transtornos globais do desenvolvimento (TGD)',
+    ahd_permanente: 'Atendimento hospitalar/domiciliar – permanente',
+    intelectual: 'Deficiência intelectual / mental',
+    sindrome_genetica: 'Síndrome genética ou adquirida',
+    ahd_provisorio: 'Atendimento hospitalar/domiciliar – provisório',
+    sindrome_down: 'Sindrome de Down',
+    outros: 'Outros',
+  };
+
   const estado = {
     usuario: null,
     csrf: null,
-    painel: 'confeccionar',
-    buscas: { confeccionar: '', prontos: '', entregues: '', usuarios: '' },
+    painel: 'calendario',
+    buscas: { confeccionar: '', prontos: '', entregues: '', devendo: '', usuarios: '', alunos: '', funcionarios: '', turmas: '', alocacoes: '' },
     pedido: null,
     pedidoEdicao: null,
     usuarioEdicao: null,
+    alunoEdicao: null,
+    funcionarioEdicao: null,
+    turmaEdicao: null,
+    alocacoes: { turmas: [], professores: [] },
+    alocacaoTurmaId: null,
     escola: null,
+    listas: { alunos: [], matricula: [], funcionarios: [], turmas: [] },
+    matriculaLote: { ids: new Set(), selecionados: new Map() },
+    diario: { turmaId: null, dados: null },
   };
 
   const MAPA_CAMPOS = {
@@ -36,6 +62,26 @@
     logo: '#escola-logo-nome',
   };
 
+  const MAPA_SENHA = {};
+  document.querySelectorAll('#form-senha [name]').forEach((el) => {
+    if (!MAPA_SENHA[el.name]) MAPA_SENHA[el.name] = `#form-senha [name="${el.name}"]`;
+  });
+
+  const MAPA_DEVENDO = {};
+  document.querySelectorAll('#form-devendo [name]').forEach((el) => {
+    if (!MAPA_DEVENDO[el.name]) MAPA_DEVENDO[el.name] = `#form-devendo [name="${el.name}"]`;
+  });
+
+  const MAPA_ALUNO = {};
+  document.querySelectorAll('#form-aluno [name]').forEach((el) => {
+    if (!MAPA_ALUNO[el.name]) MAPA_ALUNO[el.name] = `#form-aluno [name="${el.name}"]`;
+  });
+
+  const MAPA_FUNCIONARIO = {};
+  document.querySelectorAll('#form-funcionario [name]').forEach((el) => {
+    if (!MAPA_FUNCIONARIO[el.name]) MAPA_FUNCIONARIO[el.name] = `#form-funcionario [name="${el.name}"]`;
+  });
+
   /* ---------------- utilidades ---------------- */
 
   function esc(valor) {
@@ -58,6 +104,21 @@
     return `${dia}/${mes}/${ano}`;
   }
 
+  function dataCurta(iso) {
+    if (!iso) return '';
+    const [ano, mes, dia] = iso.split('-');
+    return `${dia}/${mes}`;
+  }
+
+  // Padrão do texto de retorno: "Transferido em 28/05 / Retornou em 02/09"
+  function textoRetorno(matricula) {
+    if (!matricula || !matricula.retorno || !matricula.retorno_transferencia) return '';
+    const transferido = dataCurta(matricula.retorno_transferencia);
+    const retornou = dataCurta(matricula.data_inicio);
+    if (!transferido || !retornou) return '';
+    return `Transferido em ${transferido} / Retornou em ${retornou}`;
+  }
+
   function soDigitos(v) { return String(v || '').replace(/\D/g, ''); }
 
   function mascaraCPF(input) {
@@ -77,6 +138,34 @@
     else input.value = `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
   }
 
+  // Matrícula da certidão civil: 6 2 2 4 1 5 3 7 2 (32 dígitos)
+  function mascaraCertidaoMatricula(input) {
+    const d = soDigitos(input.value).slice(0, 32);
+    const blocos = [6, 2, 2, 4, 1, 5, 3, 7, 2];
+    const partes = [];
+    let pos = 0;
+    for (const tam of blocos) {
+      if (pos >= d.length) break;
+      partes.push(d.slice(pos, pos + tam));
+      pos += tam;
+    }
+    input.value = partes.join(' ');
+  }
+
+  // Cartão do SUS: 3 4 4 4 (15 dígitos)
+  function mascaraCartaoSus(input) {
+    const d = soDigitos(input.value).slice(0, 15);
+    const blocos = [3, 4, 4, 4];
+    const partes = [];
+    let pos = 0;
+    for (const tam of blocos) {
+      if (pos >= d.length) break;
+      partes.push(d.slice(pos, pos + tam));
+      pos += tam;
+    }
+    input.value = partes.join(' ');
+  }
+
   function notificar(mensagem, tipo = 'info') {
     const aviso = document.createElement('div');
     aviso.className = `aviso ${tipo}`;
@@ -90,11 +179,11 @@
     form.querySelectorAll('.mensagem-erro').forEach((m) => m.remove());
   }
 
-  function mostrarErros(form, campos) {
+  function mostrarErros(form, campos, mapa = MAPA_CAMPOS) {
     limparErros(form);
     if (!campos) return;
     for (const [chave, mensagem] of Object.entries(campos)) {
-      const alvo = $(MAPA_CAMPOS[chave] || '');
+      const alvo = $(mapa[chave] || '');
       if (!alvo) continue;
       const campo = alvo.closest('.campo');
       if (!campo) continue;
@@ -108,15 +197,15 @@
 
   /* ---------------- API ---------------- */
 
-  async function api(metodo, rota, corpo) {
+  async function api(metodo, rota, corpo, opcoes = {}) {
     const cabecalhos = {};
-    if (corpo !== undefined) cabecalhos['content-type'] = 'application/json';
+    if (corpo !== undefined) cabecalhos['content-type'] = opcoes.tipoCorpo || 'application/json';
     if (estado.csrf) cabecalhos['x-csrf-token'] = estado.csrf;
 
     const resposta = await fetch(rota, {
       method: metodo,
       headers: cabecalhos,
-      body: corpo === undefined ? undefined : JSON.stringify(corpo),
+      body: corpo === undefined ? undefined : opcoes.bruto ? corpo : JSON.stringify(corpo),
     });
 
     let dados = null;
@@ -132,6 +221,7 @@
       const erro = new Error((dados && dados.erro) || 'Não foi possível concluir a operação.');
       erro.status = resposta.status;
       erro.campos = dados && dados.campos;
+      erro.erros = (dados && dados.erros) || [];
       erro.requer_confirmacao = Boolean(dados && dados.requer_confirmacao);
       erro.avisos = (dados && dados.avisos) || [];
       erro.resumo = dados && dados.resumo;
@@ -157,8 +247,12 @@
     $('#tela-app').hidden = false;
     $('#usuario-atual').innerHTML = `<b>${esc(estado.usuario.nome)}</b> · ${esc(rotuloPerfil(estado.usuario.perfil))}`;
     $('#aba-usuarios').hidden = estado.usuario.perfil !== 'admin';
-    carregarPainel();
+    $('#aba-administracao').hidden = estado.usuario.perfil !== 'admin';
+    $('#grupo-configuracoes').hidden = estado.usuario.perfil !== 'admin';
+    abrirPainel('calendario');
+    api('GET', '/api/pedidos/contagens').then(atualizarContadores).catch(() => {});
     carregarEscola();
+    atualizarBadgesCadastros();
   }
 
   function encerrarSessao(mensagem) {
@@ -176,14 +270,23 @@
   function abrirPainel(nome) {
     estado.painel = nome;
     $$('.aba').forEach((a) => a.classList.toggle('ativa', a.dataset.painel === nome));
-    ['confeccionar', 'prontos', 'entregues', 'usuarios'].forEach((p) => {
+    ['calendario', 'confeccionar', 'prontos', 'entregues', 'devendo', 'alunos', 'matricula', 'diario', 'funcionarios', 'turmas', 'alocacoes', 'usuarios', 'administracao'].forEach((p) => {
       $(`#painel-${p}`).hidden = p !== nome;
     });
     carregarPainel();
   }
 
   async function carregarPainel() {
+    if (estado.painel === 'calendario') return carregarCalendario();
+    if (estado.painel === 'alunos') return carregarAlunos();
+    if (estado.painel === 'matricula') return carregarMatricula();
+    if (estado.painel === 'diario') return carregarDiario();
+    if (estado.painel === 'funcionarios') return carregarFuncionarios();
+    if (estado.painel === 'turmas') return carregarTurmas();
+    if (estado.painel === 'alocacoes') return carregarAlocacoes();
     if (estado.painel === 'usuarios') return carregarUsuarios();
+    if (estado.painel === 'administracao') return carregarAdministracao();
+    if (estado.painel === 'devendo') return carregarDevendo();
     return carregarPedidos();
   }
 
@@ -209,12 +312,159 @@
     $('#badge-entregues').textContent = contagens.entregue;
   }
 
+  /* ---------------- devendo histórico ---------------- */
+
+  async function carregarDevendo() {
+    try {
+      const parametros = new URLSearchParams({ status: 'sim' });
+      const busca = estado.buscas.devendo;
+      if (busca) parametros.set('q', busca);
+      const dados = await api('GET', `/api/devendo-historico?${parametros.toString()}`);
+      if (estado.painel !== 'devendo') return;
+      $('#badge-devendo').textContent = dados.contagens.sim;
+      renderizarDevendo(dados.itens);
+    } catch (e) {
+      if (e.status !== 401) notificar(e.message, 'erro');
+    }
+  }
+
+  function renderizarDevendo(itens) {
+    devendoItens = itens;
+    $('#corpo-devendo').innerHTML = itens
+      .map(
+        (item) => `<tr>
+          <td><strong>${esc(item.aluno_nome)}</strong></td>
+          <td>${esc(item.unidade_escolar_anterior || '—')}</td>
+          <td>${esc(formatarData(String(item.criado_em).slice(0, 10)))}</td>
+          <td class="acao">
+            <button type="button" class="btn texto" data-entrega-devendo="${item.id}">Registrar entrega</button>
+          </td>
+        </tr>`
+      )
+      .join('');
+    $('#vazio-devendo').hidden = itens.length > 0;
+  }
+
+  let devendoItens = [];
+  let entregaDevendoAtual = null;
+
+  function abrirEntregaDevendo(item) {
+    entregaDevendoAtual = item;
+    $('#entrega-devendo-resumo').innerHTML =
+      `<b>${esc(item.aluno_nome)}</b> — ${esc(item.unidade_escolar_anterior || 'sem unidade escolar anterior')}`;
+    const formulario = $('#form-entrega-devendo');
+    formulario.reset();
+    limparErros(formulario);
+    $('#entrega-devendo-data').value = new Date().toISOString().slice(0, 10);
+    abrirModal('#modal-entrega-devendo');
+  }
+
+  $('#form-devendo').addEventListener('submit', async (evento) => {
+    evento.preventDefault();
+    const form = evento.currentTarget;
+    limparErros(form);
+
+    const corpo = {};
+    for (const [chave, valor] of new FormData(form).entries()) corpo[chave] = valor;
+
+    const erros = {};
+    if (!corpo.aluno_nome) erros.aluno_nome = 'Informe o nome do aluno.';
+    if (!corpo.unidade_escolar_anterior) erros.unidade_escolar_anterior = 'Informe a unidade escolar anterior.';
+    if (Object.keys(erros).length > 0) {
+      mostrarErros(form, erros, MAPA_DEVENDO);
+      return;
+    }
+
+    const botao = $('#btn-adicionar-devendo');
+    botao.disabled = true;
+    try {
+      await api('POST', '/api/devendo-historico', corpo);
+      form.reset();
+      notificar('Aluno adicionado à lista de devendo histórico.', 'sucesso');
+      carregarDevendo();
+    } catch (e) {
+      if (e.campos) mostrarErros(form, e.campos, MAPA_DEVENDO);
+      else notificar(e.message, 'erro');
+    } finally {
+      botao.disabled = false;
+    }
+  });
+
+  $('#corpo-devendo').addEventListener('click', (evento) => {
+    const botao = evento.target.closest('[data-entrega-devendo]');
+    if (!botao) return;
+    const item = devendoItens.find((i) => i.id === Number(botao.dataset.entregaDevendo));
+    if (item) abrirEntregaDevendo(item);
+  });
+
+  $('#form-entrega-devendo').addEventListener('submit', async (evento) => {
+    evento.preventDefault();
+    const form = evento.currentTarget;
+    limparErros(form);
+
+    const corpo = { data_entrega: $('#entrega-devendo-data').value };
+    if (!corpo.data_entrega) {
+      mostrarErros(form, { data_entrega: 'Informe a data da entrega.' }, { data_entrega: '#entrega-devendo-data' });
+      return;
+    }
+
+    const botao = $('#btn-confirmar-entrega-devendo');
+    botao.disabled = true;
+    try {
+      await api('POST', `/api/devendo-historico/${entregaDevendoAtual.id}/entrega`, corpo);
+      fecharModal($('#modal-entrega-devendo'));
+      notificar(`Entrega de ${entregaDevendoAtual.aluno_nome} registrada.`, 'sucesso');
+      entregaDevendoAtual = null;
+      carregarDevendo();
+    } catch (e) {
+      if (e.campos) mostrarErros(form, e.campos, { data_entrega: '#entrega-devendo-data' });
+      else notificar(e.message, 'erro');
+    } finally {
+      botao.disabled = false;
+    }
+  });
+
+  async function atualizarBadgesCadastros() {
+    try {
+      const alunos = await api('GET', '/api/alunos?porPagina=1');
+      $('#badge-alunos').textContent = alunos.total;
+    } catch { /* silencia */ }
+    try {
+      const funcionarios = await api('GET', '/api/funcionarios?porPagina=1');
+      $('#badge-funcionarios').textContent = funcionarios.total;
+    } catch { /* silencia */ }
+    try {
+      const turmas = await api('GET', '/api/turmas?porPagina=1');
+      $('#badge-turmas').textContent = turmas.total;
+    } catch { /* silencia */ }
+    try {
+      const alocacoes = await api('GET', '/api/alocacoes?contagem=1');
+      $('#badge-alocacoes').textContent = alocacoes.total_alocacoes;
+    } catch { /* silencia */ }
+    try {
+      const devendo = await api('GET', '/api/devendo-historico?status=sim&porPagina=1');
+      $('#badge-devendo').textContent = devendo.contagens.sim;
+    } catch { /* silencia */ }
+    if (estado.usuario && estado.usuario.perfil === 'admin') {
+      try {
+        const usuarios = await api('GET', '/api/usuarios');
+        $('#badge-usuarios').textContent = usuarios.length;
+      } catch { /* silencia */ }
+    }
+  }
+
   function renderizar(painel, itens) {
     const corpo = $(`#corpo-${painel}`);
     const vazio = $(`#vazio-${painel}`);
     corpo.innerHTML = itens.map((linha) => linhaHtml(painel, linha)).join('');
     vazio.hidden = itens.length > 0;
     corpo.closest('.tabela-rolagem').hidden = itens.length === 0;
+  }
+
+  function linhaTransferida(p) {
+    return p.status_matricula === 'transferido_intercampus' || p.status_matricula === 'transferido_externo'
+      ? 'transferido'
+      : '';
   }
 
   function linhaHtml(painel, p) {
@@ -280,7 +530,770 @@
       </tr>`;
     }
 
+    if (painel === 'alunos') {
+      const botaoExcluirAluno = podeExcluir
+        ? '<button type="button" class="btn mini perigo" data-acao="excluir-aluno" data-id="' + id + '">Excluir</button>'
+        : '';
+      return `<tr class="${linhaTransferida(p)}">
+        <td class="negrito">${esc(p.nome)}${p.nome_afetivo ? `<span class="secundario">Nome afetivo: ${esc(p.nome_afetivo)}</span>` : ''}</td>
+        <td>${esc(p.cpf)}</td>
+        <td>${esc(p.nascimento_br)}</td>
+        <td>${esc(p.responsavel_nome)}<span class="secundario">${esc(p.responsavel_parentesco)}${p.responsavel_telefone ? ` · ${esc(p.responsavel_telefone)}` : ''}</span></td>
+        <td>${esc(p.naturalidade)}${p.estado_origem ? `<span class="secundario">${esc(p.estado_origem)}</span>` : ''}</td>
+        <td class="acao">
+          ${botaoVisualizar('ver-aluno', id)}
+          <button type="button" class="btn mini primario" data-acao="editar-aluno" data-id="${id}">Editar</button>
+          ${botaoExcluirAluno}
+        </td>
+      </tr>`;
+    }
+
+    if (painel === 'matricula') {
+      return `<tr class="${linhaTransferida(p)}">
+        <td class="negrito">${esc(p.nome)}${p.nome_afetivo ? `<span class="secundario">Nome afetivo: ${esc(p.nome_afetivo)}</span>` : ''}</td>
+        <td>${esc(p.cpf)}</td>
+        <td>${esc(p.nascimento_br)}</td>
+        <td>${esc(p.responsavel_nome)}<span class="secundario">${esc(p.responsavel_parentesco)}${p.responsavel_telefone ? ` · ${esc(p.responsavel_telefone)}` : ''}</span></td>
+        <td>${esc(p.naturalidade)}${p.estado_origem ? `<span class="secundario">${esc(p.estado_origem)}</span>` : ''}</td>
+        <td class="acao">
+          <button type="button" class="btn mini amarelo" data-acao="adicionar-lote" data-id="${id}">Adicionar</button>
+        </td>
+      </tr>`;
+    }
+
+    if (painel === 'funcionarios') {
+      const botaoExcluirFuncionario = podeExcluir
+        ? '<button type="button" class="btn mini perigo" data-acao="excluir-funcionario" data-id="' + id + '">Excluir</button>'
+        : '';
+      return `<tr>
+        <td class="negrito">${esc(p.nome)}${p.email ? `<span class="secundario">${esc(p.email)}</span>` : ''}</td>
+        <td>${esc(p.matricula || '—')}</td>
+        <td>${esc(p.cargo)}<span class="secundario">${esc(p.vinculo_empregaticio || '')}</span></td>
+        <td>${esc(p.funcao || '—')}</td>
+        <td>${formatarData(p.data_admissao)}</td>
+        <td><span class="pill ${p.status === 'inativo' ? 'ambar' : 'verde'}">${p.status === 'inativo' ? 'Inativo' : 'Ativo'}</span>${
+          p.status === 'inativo' && p.data_inativacao
+            ? `<span class="secundario">desde ${formatarData(p.data_inativacao)}</span>`
+            : ''
+        }</td>
+        <td class="acao">
+          ${botaoVisualizar('ver-funcionario', id)}
+          <button type="button" class="btn mini primario" data-acao="editar-funcionario" data-id="${id}">Editar</button>
+          ${botaoExcluirFuncionario}
+        </td>
+      </tr>`;
+    }
+
+    if (painel === 'turmas') {
+      const botaoExcluirTurma = podeExcluir
+        ? '<button type="button" class="btn mini perigo" data-acao="excluir-turma" data-id="' + id + '">Excluir</button>'
+        : '';
+      const tipo = p.tipo_turma
+        ? `<span class="pill ${p.tipo_turma === 'NAI' ? 'azul' : 'verde'}">${p.tipo_turma}</span>`
+        : '<span class="secundario" style="margin:0">—</span>';
+      return `<tr>
+        <td class="negrito">${p.ano_letivo}</td>
+        <td>${esc(p.matriz)}</td>
+        <td>${esc(p.ano_escolaridade)}</td>
+        <td class="negrito">${esc(p.sigla)}</td>
+        <td>${esc(p.turno)}</td>
+        <td>${tipo}</td>
+        <td class="acao">
+          ${botaoVisualizar('ver-turma', id)}
+          <button type="button" class="btn mini primario" data-acao="editar-turma" data-id="${id}">Editar</button>
+          ${botaoExcluirTurma}
+        </td>
+      </tr>`;
+    }
+
+    if (painel === 'alocacoes') {
+      const lista = p.professores || [];
+      const professores = lista.map((prof) =>
+        `<div>${esc(prof.professor_nome)} <span class="pill ${prof.ativo ? 'verde' : 'ambar'}">${prof.ativo ? 'Ativo' : 'Inativo'}</span></div>`
+      ).join('') || '<span class="secundario" style="margin:0">—</span>';
+      const cargoFuncao = lista.map((prof) =>
+        `<div>${esc(prof.cargo || '—')} / ${esc(prof.funcao || '—')}</div>`
+      ).join('') || '<span class="secundario" style="margin:0">—</span>';
+      return `<tr>
+        <td class="negrito">${esc(p.sigla)}<span class="secundario">${esc(p.ano_escolaridade)} · ${esc(p.matriz)}</span></td>
+        <td>${p.ano_letivo}</td>
+        <td>${esc(p.turno)}</td>
+        <td>${professores}</td>
+        <td>${cargoFuncao}</td>
+        <td class="acao">
+          ${botaoVisualizar('ver-alocacao', id)}
+          <button type="button" class="btn mini primario" data-acao="alocar" data-id="${id}">Alocar</button>
+        </td>
+      </tr>`;
+    }
+
     return '';
+  }
+
+  /* ---------------- visualização de cadastro (olho) ---------------- */
+
+  const ICONE_OLHO =
+    '<svg class="ic-olho" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5C6.5 5 2.7 9.1 1.5 12c1.2 2.9 5 7 10.5 7s9.3-4.1 10.5-7c-1.2-2.9-5-7-10.5-7zm0 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm0-6a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg>';
+
+  function botaoVisualizar(acao, id) {
+    return `<button type="button" class="btn mini icon-btn" data-acao="${acao}" data-id="${id}" title="Visualizar cadastro" aria-label="Visualizar cadastro">${ICONE_OLHO}</button>`;
+  }
+
+  const GRUPOS_ALUNO = [
+    {
+      titulo: 'Identificação',
+      campos: [
+        ['nome', 'Nome'], ['nome_afetivo', 'Nome afetivo'], ['nome_social', 'Nome social'],
+        ['cpf', 'CPF'], ['passaporte', 'Passaporte'], ['data_nascimento', 'Data de nascimento', 'data'],
+        ['nacionalidade', 'Nacionalidade'], ['pais_origem', 'País de origem'], ['estado_origem', 'UF de origem'],
+        ['naturalidade', 'Naturalidade'],
+        ['sexo', 'Sexo'], ['raca', 'Raça/cor'], ['estado_civil', 'Estado civil'],
+        ['tipo_sanguineo', 'Tipo sanguíneo'],
+      ],
+    },
+    {
+      titulo: 'Dados Escolares Anteriores',
+      campos: [
+        ['ue_origem', 'Unidade escolar de origem'],
+        ['ue_municipio', 'Município/UF de origem'],
+        ['devendo_historico', 'Devendo Histórico Escolar', 'simNao'],
+      ],
+    },
+    {
+      titulo: 'Documentos',
+      campos: [
+        ['rg_numero', 'RG'], ['rg_estado_emissor', 'RG — UF emissor'], ['rg_orgao_emissor', 'RG — órgão emissor'],
+        ['rg_data_emissao', 'RG — data de emissão', 'data'],
+        ['titulo_numero', 'Título de eleitor'], ['titulo_zona', 'Zona'], ['titulo_secao', 'Seção'],
+        ['titulo_data_emissao', 'Título — data de emissão', 'data'],
+        ['cartao_sus', 'Cartão SUS'], ['nis', 'NIS'], ['educacenso', 'Código Educacenso'],
+        ['certidao_tipo', 'Certidão'], ['certidao_cartorio', 'Cartório'], ['certidao_matricula', 'Certidão — matrícula'],
+      ],
+    },
+    {
+      titulo: 'Filiação',
+      campos: [
+        ['filiacao1_nome', 'Filiação 1'], ['filiacao1_cpf', 'Filiação 1 — CPF'],
+        ['filiacao1_rg', 'Filiação 1 — RG'], ['filiacao1_telefone', 'Filiação 1 — telefone'],
+        ['filiacao1_estado_civil', 'Filiação 1 — estado civil'], ['filiacao1_falecido', 'Filiação 1 — falecido', 'bool'],
+        ['filiacao2_nome', 'Filiação 2'], ['filiacao2_cpf', 'Filiação 2 — CPF'],
+        ['filiacao2_rg', 'Filiação 2 — RG'], ['filiacao2_telefone', 'Filiação 2 — telefone'],
+        ['filiacao2_estado_civil', 'Filiação 2 — estado civil'], ['filiacao2_falecido', 'Filiação 2 — falecido', 'bool'],
+      ],
+    },
+    {
+      titulo: 'Responsável',
+      campos: [
+        ['responsavel_nome', 'Responsável'], ['responsavel_cpf', 'Responsável — CPF'],
+        ['responsavel_rg', 'Responsável — RG'],
+        ['responsavel_parentesco', 'Responsável — parentesco'], ['responsavel_estado_civil', 'Responsável — estado civil'],
+        ['responsavel_email', 'Responsável — e-mail'], ['responsavel_telefone', 'Responsável — telefone'],
+        ['responsavel_falecido', 'Responsável — falecido', 'bool'],
+      ],
+    },
+    {
+      titulo: 'Endereço e contatos',
+      campos: [
+        ['cep', 'CEP'], ['logradouro', 'Logradouro'], ['numero', 'Número'], ['complemento', 'Complemento'],
+        ['bairro', 'Bairro'], ['cidade', 'Cidade'], ['estado', 'UF'], ['zona_residencial', 'Zona residencial'],
+      ],
+    },
+    {
+      titulo: 'Condições de saúde',
+      campos: [
+        ['deficiencias', 'Deficiências / transtornos / superdotação', 'marcas'],
+        ['deficiencia_outros', 'Outros (descrição)'],
+        ['codigo_cid', 'CID'], ['outros_laudos', 'Outros laudos'],
+        ['alergico', 'Alergico', 'bool'], ['alergia_tipo', 'Alergia'],
+        ['beneficio_social', 'Benefício social', 'bool'], ['beneficio_tipo', 'Tipo de benefício'],
+        ['laudo_especifico', 'Laudo médico específico', 'bool'],
+        ['laudo_reducao_carga', 'Laudo para redução de carga horária', 'bool'],
+        ['acompanhamento_especial', 'Acompanhamento específico', 'bool'],
+        ['tipo_acompanhamento', 'Tipo de acompanhamento'],
+        ['instituicao_acompanhamento', 'Instituição do acompanhamento'],
+      ],
+    },
+    {
+      titulo: 'Transporte',
+      campos: [
+        ['transporte_escolar', 'Necessita de transporte', 'bool'],
+        ['transporte_poder', 'Poder'], ['transporte_veiculo', 'Veículo'],
+        ['transporte_adaptado', 'Transporte adaptado', 'bool'],
+        ['transporte_km', 'Distância (km)'],
+      ],
+    },
+    {
+      titulo: 'Autorização de imagem',
+      campos: [['autoriza_imagem', 'Autoriza o uso da imagem', 'bool']],
+    },
+  ];
+
+  const GRUPOS_FUNCIONARIO = [
+    {
+      titulo: 'Identificação',
+      campos: [
+        ['nome', 'Nome'], ['cpf', 'CPF'], ['passaporte', 'Passaporte'], ['nacionalidade', 'Nacionalidade'],
+        ['sexo', 'Sexo'], ['raca', 'Raça/cor'], ['data_nascimento', 'Data de nascimento', 'data'],
+        ['estado_civil', 'Estado civil'], ['nome_pai', 'Nome do pai'], ['nome_mae', 'Nome da mãe'],
+        ['naturalidade', 'Naturalidade'], ['escolaridade', 'Escolaridade'], ['tipo_ensino_medio', 'Tipo de ensino médio'],
+      ],
+    },
+    {
+      titulo: 'Documentos',
+      campos: [
+        ['rg_numero', 'RG'], ['rg_estado_emissor', 'RG — UF emissor'], ['rg_orgao_emissor', 'RG — órgão emissor'],
+        ['rg_data_emissao', 'RG — data de emissão', 'data'],
+        ['cp_numero', 'Carteira de trabalho — nº'], ['cp_serie', 'Carteira de trabalho — série'],
+        ['titulo_numero', 'Título de eleitor'], ['titulo_zona', 'Zona'], ['titulo_secao', 'Seção'],
+      ],
+    },
+    {
+      titulo: 'Endereço e contatos',
+      campos: [
+        ['email', 'E-mail'], ['telefone', 'Telefone'], ['cep', 'CEP'], ['logradouro', 'Logradouro'],
+        ['numero', 'Número'], ['complemento', 'Complemento'], ['bairro', 'Bairro'], ['cidade', 'Cidade'],
+        ['estado', 'UF'], ['zona_residencial', 'Zona residencial'],
+      ],
+    },
+    {
+      titulo: 'Vínculo e função',
+      campos: [
+        ['matricula', 'Matrícula'], ['cargo', 'Cargo'], ['funcao', 'Função'],
+        ['vinculo_empregaticio', 'Vínculo empregatício'], ['lotacao', 'Lotação'],
+        ['data_admissao', 'Data de admissão', 'data'], ['lotacoes_anteriores', 'Lotações anteriores'],
+        ['cursos_continuados', 'Cursos continuados', 'lista'],
+        ['status', 'Situação', 'statusFunc'], ['data_inativacao', 'Data de inativação', 'data'],
+      ],
+    },
+    {
+      titulo: 'Acumulação de cargo',
+      campos: [
+        ['acumulacao_cargo', 'Acumula cargo', 'bool'], ['acum_cargo', 'Cargo acumulado'],
+        ['acum_funcao', 'Função acumulada'], ['acum_matricula', 'Matrícula acumulada'], ['acum_local', 'Local'],
+      ],
+    },
+  ];
+
+  const GRUPOS_TURMA = [
+    {
+      titulo: 'Turma',
+      campos: [
+        ['ano_letivo', 'Ano letivo'], ['matriz', 'Matriz'], ['ano_escolaridade', 'Ano de escolaridade'],
+        ['sigla', 'Sigla'], ['turno', 'Turno'], ['tipo_turma', 'Tipo de turma'],
+      ],
+    },
+  ];
+
+  function formatarValorExibido(valor, tipo) {
+    if (valor === null || valor === undefined || valor === '') return '';
+    if (tipo === 'data') return formatarData(valor);
+    if (tipo === 'bool') return valor ? 'Sim' : 'Não';
+    if (tipo === 'simNao') return String(valor).toLowerCase() === 'sim' ? 'Sim' : 'Não';
+    if (tipo === 'lista') return Array.isArray(valor) && valor.length ? esc(valor.join(' · ')) : '';
+    if (tipo === 'marcas') {
+      return String(valor || '').split('|').filter(Boolean).map((m) => esc(MARCAS_DEFICIENCIA[m] || m)).join(' · ');
+    }
+    if (tipo === 'statusFunc') return String(valor).toLowerCase() === 'inativo' ? 'Inativo' : 'Ativo';
+    return esc(valor);
+  }
+
+  function gruposDeItens(gruposRotulos, item) {
+    return gruposRotulos.map((g) => ({
+      titulo: g.titulo,
+      pares: g.campos.map(([campo, rotulo, tipo]) => [rotulo, formatarValorExibido(item[campo], tipo)]),
+    }));
+  }
+
+  function abrirVisualizacao(titulo, grupos, acoesHtml) {
+    $('#ver-titulo').textContent = titulo;
+    const caixaAcoes = $('#ver-acoes');
+    caixaAcoes.innerHTML = acoesHtml || '';
+    caixaAcoes.hidden = !acoesHtml;
+    $('#ver-corpo').innerHTML = grupos
+      .map((g) => {
+        const linhas = (g.pares || []).filter((par) => par[1] !== '' && par[1] !== null && par[1] !== undefined);
+        if (!linhas.length) return '';
+        const cabecalho = g.titulo ? `<p class="detalhe-grupo">${esc(g.titulo)}</p>` : '';
+        return (
+          cabecalho +
+          linhas
+            .map(([rotulo, valor]) =>
+              `<div class="detalhe"><span class="detalhe-rotulo">${esc(rotulo)}</span><span class="detalhe-valor">${valor}</span></div>`)
+            .join('')
+        );
+      })
+      .join('');
+    abrirModal('#modal-ver');
+  }
+
+  const SITUACOES_MATRICULA = {
+    matriculado: ['Matriculado', 'verde'],
+    transferido_intercampus: ['Transferido — intercampus', 'laranja'],
+    transferido_externo: ['Transferido — externo', 'laranja'],
+    deixou_frequentar: ['Deixou de frequentar', 'vermelho'],
+    matricula_cancelada: ['Matrícula cancelada', 'azul'],
+  };
+
+  const ACOES_DISPONIVEIS = ['transferido_intercampus', 'transferido_externo'];
+
+  function situacaoMatriculaHtml(item, matriculas) {
+    const ativa = matriculas.find((m) => m.status === 'matriculado' && m.ativo);
+    const status = ativa ? 'matriculado' : item.status_matricula;
+    const info = SITUACOES_MATRICULA[status];
+    if (!info) return '<span class="secundario">Sem matrícula registrada</span>';
+
+    const ultima = matriculas[0];
+    const transferido = status === 'transferido_intercampus' || status === 'transferido_externo';
+    const detalhe = transferido && ultima
+      ? `<span class="secundario">em ${esc(formatarData(ultima.data_fim) || '')}` +
+        `${ultima.destino ? ` — destino: ${esc(ultima.destino)}` : ''}` +
+        `${ultima.motivo ? ` · motivo: ${esc(ultima.motivo)}` : ''}</span>`
+      : '';
+    const marcaCenso = (ativa && ativa.pos_censo)
+      ? ' <span class="pill amarelo">Matriculado pós-censo</span>'
+      : '';
+    const marcaRetorno = textoRetorno(ativa)
+      ? ` <span class="pill roxo">${esc(textoRetorno(ativa))}</span>`
+      : '';
+    return `<span class="pill ${info[1]}">${info[0]}</span>${marcaCenso}${marcaRetorno} ${detalhe}`;
+  }
+
+  function acoesAlunoHtml(item, matriculas) {
+    const { opcoes } = analisarAcoesAluno(matriculas);
+    const lista = opcoes
+      .map(([valor, rotulo]) => `<option value="${valor}">${esc(rotulo)}</option>`)
+      .join('');
+    const desabilitado = opcoes.length > 1 ? '' : 'disabled';
+    const botao = matriculas.length
+      ? '<button type="button" class="btn mini" id="btn-declaracao">Gerar Declaração</button>'
+      : '';
+    return `<select id="acoes-aluno" aria-label="Ações sobre o aluno" ${desabilitado}>${lista}</select>${botao}`;
+  }
+
+  const TIPOS_TRANSFERENCIA = ['transferido_intercampus', 'transferido_externo'];
+
+  // Monta as opcoes do select de acoes conforme o estado do aluno.
+  function analisarAcoesAluno(matriculas) {
+    const ativa = matriculas.find((m) => m.status === 'matriculado' && m.ativo);
+    const transferida = matriculas.find((m) => TIPOS_TRANSFERENCIA.includes(m.status));
+    const deixou = matriculas.find((m) => m.status === 'deixou_frequentar');
+    const matriculasPosterioresAtivas = transferida
+      ? matriculas.filter((m) => m.id !== transferida.id && m.ativo)
+      : [];
+    const outrasAtivasDeixou = deixou
+      ? matriculas.filter((m) => m.id !== deixou.id && m.ativo)
+      : [];
+
+    const opcoes = [['', 'Selecione uma ação...']];
+    if (transferida) {
+      opcoes.push(['corrigir_transferencia', 'Corrigir transferência']);
+      // Só dá para desfazer se o aluno não voltou a ter outra matrícula.
+      if (matriculasPosterioresAtivas.length === 0) {
+        opcoes.push(['desfazer_transferencia', 'Desfazer transferência']);
+      }
+    }
+    if (deixou && outrasAtivasDeixou.length === 0) {
+      opcoes.push(['desfazer_deixou', 'Desfazer deixou de frequentar']);
+    }
+    if (ativa) {
+      opcoes.push(['transferido_intercampus', 'Transferência Intercampus']);
+      opcoes.push(['transferido_externo', 'Transferência Externa']);
+      opcoes.push(['deixou_frequentar', 'Deixou de frequentar']);
+      opcoes.push(['matricula_cancelada', 'Cancelar Matrícula']);
+    }
+
+    return { ativa, transferida, deixou, opcoes };
+  }
+
+  function situacaoAlunoGrupo(item, matriculas) {
+    const { opcoes } = analisarAcoesAluno(matriculas);
+    const ajuda = opcoes.length > 1
+      ? ''
+      : '<div class="secundario">Nenhuma ação disponível para este aluno.</div>';
+    return {
+      titulo: 'Situação da matrícula',
+      pares: [
+        ['Situação atual', situacaoMatriculaHtml(item, matriculas) + ajuda],
+      ],
+    };
+  }
+
+  async function visualizarAluno(id) {
+    const item = (estado.listas.alunos || []).find((a) => a.id === id);
+    if (!item) return;
+
+    let matriculas = [];
+    try {
+      const dados = await api('GET', `/api/matriculas?aluno_id=${id}`);
+      matriculas = dados.itens || [];
+    } catch (e) {
+      if (e.status !== 401) notificar(e.message, 'erro');
+    }
+
+    const grupos = gruposDeItens(GRUPOS_ALUNO, item);
+    grupos.unshift(situacaoAlunoGrupo(item, matriculas));
+    abrirVisualizacao(`Aluno — ${item.nome}`, grupos, acoesAlunoHtml(item, matriculas));
+
+    const acoes = analisarAcoesAluno(matriculas);
+    $('#acoes-aluno').addEventListener('change', (evento) => {
+      const acao = evento.target.value;
+      evento.target.value = '';
+      if (!acao) return;
+      if (acao === 'corrigir_transferencia') {
+        abrirTransferencia(item, acoes.transferida, acoes.transferida.status, 'corrigir');
+        return;
+      }
+      if (acao === 'desfazer_transferencia') {
+        desfazerTransferencia(item, acoes.transferida);
+        return;
+      }
+      if (acao === 'desfazer_deixou') {
+        desfazerDeixou(item, acoes.deixou);
+        return;
+      }
+      if (acao === 'deixou_frequentar') {
+        marcarDeixou(item, acoes.ativa);
+        return;
+      }
+      if (!ACOES_DISPONIVEIS.includes(acao)) {
+        notificar('Esta ação ainda será implementada no sistema.', 'erro');
+        return;
+      }
+      abrirTransferencia(item, acoes.ativa, acao, 'criar');
+    });
+
+    const botaoDeclaracao = $('#btn-declaracao');
+    if (botaoDeclaracao) {
+      botaoDeclaracao.addEventListener('click', () => {
+        const matricula = acoes.ativa || acoes.transferida || acoes.deixou || matriculas[0];
+        abrirDeclaracao(item, matricula);
+      });
+    }
+  }
+
+  /* ---------------- declaração escolar ---------------- */
+
+  const SITUACOES_POR_TIPO = {
+    comprovacao: [
+      ['matriculado', 'Matriculado'],
+      ['frequentando', 'Matriculado e Frequentando'],
+    ],
+    transferencia: [
+      ['matriculado', 'Matriculado'],
+      ['frequentando', 'Matriculado e Frequentando'],
+      ['cursou', 'Cursou'],
+    ],
+  };
+
+  let declaracaoAtual = null;
+
+  function popularAnosDeclaracao() {
+    const atual = new Date().getFullYear();
+    const anos = [];
+    for (let ano = atual - 8; ano <= atual + 6; ano += 1) anos.push(ano);
+    $('#declaracao-ano').innerHTML = anos
+      .map((ano) => `<option value="${ano}" ${ano === atual ? 'selected' : ''}>${ano}</option>`)
+      .join('');
+  }
+
+  function abrirDeclaracao(item, matricula) {
+    if (!matricula) {
+      notificar('Este aluno não possui matrícula para emitir a declaração.', 'erro');
+      return;
+    }
+    declaracaoAtual = {
+      alunoId: item.id,
+      matriculaId: matricula.id,
+      turmaId: matricula.turma_id,
+    };
+    $('#declaracao-resumo').innerHTML = [
+      `<p><span class="rotulo">Aluno</span> <span class="valor">${esc(item.nome)}</span></p>`,
+      `<p><span class="rotulo">Turma</span> <span class="valor">${esc(matricula.turma_sigla || '')}</span></p>`,
+      `<p><span class="rotulo">Ano letivo</span> <span class="valor">${esc(String(matricula.turma_ano_letivo || ''))}</span></p>`,
+      `<p><span class="rotulo">Escolaridade</span> <span class="valor">${esc(matricula.ano_escolaridade || '')}</span></p>`,
+    ].join('');
+    const form = $('#form-declaracao');
+    limparErros(form);
+    form.reset();
+    popularAnosDeclaracao();
+    $('#declaracao-situacao-opcoes').innerHTML = '';
+    $('#declaracao-situacao-campo').hidden = true;
+    $('#declaracao-final-campo').hidden = true;
+    abrirModal('#modal-declaracao');
+    $('#declaracao-tipo').focus();
+  }
+
+  $('#declaracao-tipo').addEventListener('change', () => {
+    const tipo = $('#declaracao-tipo').value;
+    if (!tipo) {
+      $('#declaracao-situacao-opcoes').innerHTML = '';
+      $('#declaracao-situacao-campo').hidden = true;
+      $('#declaracao-final-campo').hidden = true;
+      return;
+    }
+    $('#declaracao-situacao-opcoes').innerHTML = SITUACOES_POR_TIPO[tipo]
+      .map(([valor, rotulo]) =>
+        `<label class="opcao"><input type="radio" name="declaracao_situacao" value="${valor}"> ${esc(rotulo)}</label>`)
+      .join('');
+    $('#declaracao-situacao-campo').hidden = false;
+    $('#declaracao-final-campo').hidden = true;
+  });
+
+  $('#declaracao-situacao-opcoes').addEventListener('change', (evento) => {
+    $('#declaracao-final-campo').hidden = evento.target.value !== 'cursou';
+  });
+
+  $('#form-declaracao').addEventListener('submit', async (evento) => {
+    evento.preventDefault();
+    const form = evento.currentTarget;
+    if (!declaracaoAtual) return;
+    const tipo = form.elements.tipo?.value || '';
+    if (!tipo) {
+      notificar('Selecione o tipo de declaração.', 'erro');
+      return;
+    }
+    const situacao = form.elements.declaracao_situacao?.value || '';
+    if (!situacao) {
+      notificar('Selecione a situação do aluno.', 'erro');
+      return;
+    }
+    const parametros = new URLSearchParams({
+      turma_id: declaracaoAtual.turmaId,
+      matricula_id: declaracaoAtual.matriculaId,
+      tipo,
+      situacao,
+    });
+    if (situacao === 'cursou') {
+      const final = form.elements.declaracao_final?.value || '';
+      if (!final) {
+        notificar('Selecione a situação final do aluno.', 'erro');
+        return;
+      }
+      parametros.set('situacao_final', final);
+      parametros.set('ano_letivo', form.elements.ano_letivo?.value || '');
+    }
+    const ok = await baixarDocumento(
+      `/api/diario/alunos/${declaracaoAtual.alunoId}/declaracao?${parametros}`,
+      'Não foi possível gerar a declaração.',
+      'Declaração gerada.'
+    );
+    if (ok) fecharModal($('#modal-declaracao'));
+  });
+
+  const MAPA_TRANSFERENCIA = {
+    tipo: '#transferencia-tipo',
+    data: '#transferencia-data',
+    destino: '#transferencia-destino',
+    motivo: '#transferencia-motivo',
+  };
+
+  const ROTULOS_TRANSFERENCIA = {
+    transferido_intercampus: 'Transferência Intercampus',
+    transferido_externo: 'Transferência Externa',
+  };
+
+  let transferenciaAtual = null;
+
+  async function recarregarAposMatricula() {
+    await carregarAlunos();
+    await carregarMatricula();
+    if (estado.painel === 'diario') await carregarDiario();
+  }
+
+  // modo: 'criar' nova transferencia | 'corrigir' transferencia ja registrada.
+  function abrirTransferencia(item, matricula, tipo, modo = 'criar') {
+    if (!matricula) {
+      notificar('Este aluno não possui matrícula ativa para transferir.', 'erro');
+      return;
+    }
+    const corrigindo = modo === 'corrigir';
+    transferenciaAtual = { matriculaId: matricula.id, modo, tipo };
+
+    $('#transferencia-titulo').textContent = corrigindo
+      ? 'Corrigir transferência'
+      : (ROTULOS_TRANSFERENCIA[tipo] || 'Transferência');
+
+    const linhas = [
+      `<p><span class="rotulo">Aluno</span> <span class="valor">${esc(item.nome)}</span></p>`,
+      `<p><span class="rotulo">Ano letivo</span> <span class="valor">${esc(String(matricula.turma_ano_letivo || ''))}</span></p>`,
+      `<p><span class="rotulo">Turma atual</span> <span class="valor">${esc(matricula.turma_sigla || '')}</span></p>`,
+    ];
+    if (corrigindo) {
+      linhas.push(`<p><span class="rotulo">Matrícula</span> <span class="valor">${esc(matricula.matricula || '')}</span></p>`);
+      linhas.push(`<p><span class="rotulo">Situação</span> <span class="valor">${esc(ROTULOS_TRANSFERENCIA[matricula.status] || matricula.status)}</span></p>`);
+    }
+    $('#transferencia-resumo').innerHTML = linhas.join('');
+
+    const form = $('#form-transferencia');
+    limparErros(form);
+    form.elements.tipo.value = tipo;
+    form.elements.data.value = corrigindo ? (matricula.data_fim || dataHoje()) : dataHoje();
+    form.elements.destino.value = corrigindo ? (matricula.destino || '') : '';
+    form.elements.motivo.value = corrigindo ? (matricula.motivo || '') : '';
+    form.querySelector('button[type="submit"]').textContent =
+      corrigindo ? 'Salvar correção' : 'Confirmar transferência';
+    abrirModal('#modal-transferencia');
+    form.elements.data.focus();
+  }
+
+  $('#form-transferencia').addEventListener('submit', async (evento) => {
+    evento.preventDefault();
+    const form = evento.currentTarget;
+    limparErros(form);
+    if (!transferenciaAtual) return;
+    const corrigindo = transferenciaAtual.modo === 'corrigir';
+    try {
+      await api(corrigindo ? 'PUT' : 'POST', `/api/matriculas/${transferenciaAtual.matriculaId}/transferir`, {
+        tipo: form.elements.tipo.value,
+        data: form.elements.data.value,
+        destino: form.elements.destino.value,
+        motivo: form.elements.motivo.value,
+      });
+      transferenciaAtual = null;
+      fecharModal($('#modal-transferencia'));
+      fecharModal($('#modal-ver'));
+      notificar(corrigindo
+        ? 'Transferência corrigida com sucesso.'
+        : 'Transferência registrada com sucesso.', 'sucesso');
+      await recarregarAposMatricula();
+    } catch (e) {
+      if (e.campos) mostrarErros(form, e.campos, MAPA_TRANSFERENCIA);
+      else if (e.status !== 401) notificar(e.message, 'erro');
+    }
+  });
+
+  function desfazerTransferencia(item, matricula) {
+    if (!matricula) return;
+    abrirConfirmacaoExclusao(
+      {
+        rota: `/api/matriculas/${matricula.id}/desfazer-transferencia`,
+        metodo: 'PUT',
+        corpo: {},
+        titulo: 'Desfazer transferência',
+        cabecalho: 'A matrícula volta a ficar ativa e o aluno retorna à turma de origem. Os dados da transferência serão apagados.',
+        rotulo: 'Sim, desfazer',
+        mensagem: 'Transferência desfeita. O aluno voltou a ficar matriculado.',
+        aposConfirmar: async () => {
+          fecharModal($('#modal-ver'));
+          await recarregarAposMatricula();
+        },
+      },
+      `<b>${esc(item.nome)}</b> — transferido em ${esc(formatarData(matricula.data_fim) || '')}`
+    );
+  }
+
+  function marcarDeixou(item, matricula) {
+    if (!matricula) return;
+    abrirConfirmacaoExclusao(
+      {
+        rota: `/api/matriculas/${matricula.id}/deixou-frequentar`,
+        metodo: 'POST',
+        corpo: {},
+        titulo: 'Deixou de frequentar',
+        cabecalho: 'O aluno passará a constar como "Deixou de frequentar" no Diário da turma. A ação pode ser desfeita depois.',
+        rotulo: 'Sim, marcar',
+        mensagem: 'Aluno marcado como deixou de frequentar.',
+        aposConfirmar: async () => {
+          fecharModal($('#modal-ver'));
+          await recarregarAposMatricula();
+        },
+      },
+      `<b>${esc(item.nome)}</b> — matrícula ${esc(matricula.matricula || '—')}`
+    );
+  }
+
+  function desfazerDeixou(item, matricula) {
+    if (!matricula) return;
+    abrirConfirmacaoExclusao(
+      {
+        rota: `/api/matriculas/${matricula.id}/desfazer-deixou-frequentar`,
+        metodo: 'PUT',
+        corpo: {},
+        titulo: 'Desfazer deixou de frequentar',
+        cabecalho: 'A matrícula volta a ficar ativa e o aluno retorna à condição de matriculado no Diário.',
+        rotulo: 'Sim, desfazer',
+        mensagem: 'Ação desfeita. O aluno voltou a ficar matriculado.',
+        aposConfirmar: async () => {
+          fecharModal($('#modal-ver'));
+          await recarregarAposMatricula();
+        },
+      },
+      `<b>${esc(item.nome)}</b> — matrícula ${esc(matricula.matricula || '—')}`
+    );
+  }
+
+  // Atalhos da linha do Diário: reutilizam os mesmos modais do select de Ações.
+  function abrirAcaoTransferenciaDiario(matriculaId, modo) {
+    const dados = estado.diario.dados;
+    const linha = (dados && dados.alunos || []).find((a) => a.matricula_id === matriculaId);
+    if (!linha) {
+      notificar('Não foi possível localizar esta matrícula no Diário.', 'erro');
+      return;
+    }
+    const t = dados.turma || {};
+    const matricula = {
+      id: linha.matricula_id,
+      matricula: linha.matricula,
+      status: linha.status,
+      data_fim: linha.data_fim,
+      destino: linha.destino,
+      motivo: linha.motivo,
+      turma_ano_letivo: t.ano_letivo,
+      turma_sigla: t.sigla,
+    };
+    const item = { nome: linha.nome };
+    if (modo === 'desfazer') desfazerTransferencia(item, matricula);
+    else abrirTransferencia(item, matricula, linha.status, 'corrigir');
+  }
+
+  // Atalho da linha do Diário para desfazer "deixou de frequentar".
+  function abrirAcaoDeixouDiario(matriculaId) {
+    const dados = estado.diario.dados;
+    const linha = (dados && dados.alunos || []).find((a) => a.matricula_id === matriculaId);
+    if (!linha) {
+      notificar('Não foi possível localizar esta matrícula no Diário.', 'erro');
+      return;
+    }
+    const matricula = { id: linha.matricula_id, matricula: linha.matricula, status: linha.status };
+    const item = { nome: linha.nome };
+    desfazerDeixou(item, matricula);
+  }
+
+  function visualizarFuncionario(id) {
+    const item = (estado.listas.funcionarios || []).find((f) => f.id === id);
+    if (!item) return;
+    abrirVisualizacao(`Funcionário — ${item.nome}`, gruposDeItens(GRUPOS_FUNCIONARIO, item));
+  }
+
+  function visualizarTurma(id) {
+    const item = (estado.listas.turmas || []).find((t) => t.id === id);
+    if (!item) return;
+    abrirVisualizacao(`Turma — ${item.sigla}`, gruposDeItens(GRUPOS_TURMA, item));
+  }
+
+  function visualizarAlocacao(id) {
+    const turma = (estado.alocacoes.turmas || []).find((t) => t.id === id);
+    if (!turma) return;
+    const alocados = (turma.professores || [])
+      .map((prof) => {
+        const detalhe = [prof.cargo, prof.funcao].filter(Boolean).join(' / ');
+        const periodo =
+          prof.data_inicio && prof.data_fim
+            ? `<span class="secundario">${formatarData(prof.data_inicio)} a ${formatarData(prof.data_fim)}</span>`
+            : '';
+        return (
+          `<div>${esc(prof.professor_nome)}${detalhe ? ` — ${esc(detalhe)}` : ''} ${periodo} ` +
+          `<span class="pill ${prof.ativo ? 'verde' : 'ambar'}">${prof.ativo ? 'Ativo' : 'Inativo'}</span></div>`
+        );
+      })
+      .join('');
+    abrirVisualizacao(`Alocação — ${turma.sigla}`, [
+      ...gruposDeItens(GRUPOS_TURMA, turma),
+      {
+        titulo: 'Professores alocados',
+        pares: [['Professores', alocados || '<span class="secundario">Nenhum professor alocado.</span>']],
+      },
+    ]);
   }
 
   async function carregarUsuarios() {
@@ -294,6 +1307,7 @@
       corpo.innerHTML = filtrados.map(usuarioHtml).join('');
       $('#vazio-usuarios').hidden = filtrados.length > 0;
       corpo.closest('.tabela-rolagem').hidden = filtrados.length === 0;
+      atualizarBadgesCadastros();
     } catch (e) {
       if (e.status === 403) {
         abrirPainel('confeccionar');
@@ -328,18 +1342,34 @@
 
   /* ---------------- modais ---------------- */
 
+  // Modais abertos, na ordem de abertura: o último fica sempre acima dos demais.
+  const modaisAbertos = [];
+
+  function ordenarModais() {
+    modaisAbertos.forEach((m, i) => { m.style.zIndex = String(61 + i); });
+  }
+
   function abrirModal(id) {
-    $(id).hidden = false;
+    const modal = $(id);
+    const atual = modaisAbertos.indexOf(modal);
+    if (atual >= 0) modaisAbertos.splice(atual, 1);
+    modaisAbertos.push(modal);
+    ordenarModais();
+    modal.hidden = false;
     document.body.style.overflow = 'hidden';
   }
 
   function fecharModal(modal) {
     modal.hidden = true;
+    const i = modaisAbertos.indexOf(modal);
+    if (i >= 0) modaisAbertos.splice(i, 1);
+    ordenarModais();
     if ($$('.modal:not([hidden])').length === 0) document.body.style.overflow = '';
   }
 
   function fecharTodos() {
-    $$('.modal').forEach((m) => { m.hidden = true; });
+    modaisAbertos.length = 0;
+    $$('.modal').forEach((m) => { m.hidden = true; m.style.zIndex = ''; });
     document.body.style.overflow = '';
   }
 
@@ -381,6 +1411,52 @@
     encerrarSessao();
   });
 
+  /* ---------------- troca de senha própria ---------------- */
+
+  $('#btn-trocar-senha').addEventListener('click', () => {
+    const form = $('#form-senha');
+    form.reset();
+    limparErros(form);
+    abrirModal('#modal-senha');
+    $('#senha-atual').focus();
+  });
+
+  $('#form-senha').addEventListener('submit', async (evento) => {
+    evento.preventDefault();
+    const form = evento.currentTarget;
+    limparErros(form);
+
+    const senhaAtual = $('#senha-atual').value;
+    const senha = $('#senha-nova').value;
+    const senha2 = $('#senha-nova2').value;
+
+    const erros = {};
+    if (!senhaAtual) erros.senha_atual = 'Informe a senha atual.';
+    if (!senha) erros.senha = 'Informe a nova senha.';
+    else if (senha.length < 6) erros.senha = 'A nova senha precisa ter ao menos 6 caracteres.';
+    if (!senha2) erros.senha_confirmacao = 'Repita a nova senha.';
+    else if (senha2 !== senha) erros.senha_confirmacao = 'As senhas não conferem.';
+
+    if (Object.keys(erros).length > 0) {
+      mostrarErros(form, erros, MAPA_SENHA);
+      return;
+    }
+
+    const botao = $('#btn-salvar-senha');
+    botao.disabled = true;
+    try {
+      await api('POST', '/api/auth/senha', { senha_atual: senhaAtual, senha, senha_confirmacao: senha2 });
+      form.reset();
+      fecharModal($('#modal-senha'));
+      notificar('Senha alterada com sucesso.', 'sucesso');
+    } catch (e) {
+      if (e.campos) mostrarErros(form, e.campos, MAPA_SENHA);
+      else notificar(e.message, 'erro');
+    } finally {
+      botao.disabled = false;
+    }
+  });
+
   /* ---------------- abas e buscas ---------------- */
 
   $('#abas').addEventListener('click', (evento) => {
@@ -402,7 +1478,13 @@
   ligarBusca('#busca-confeccionar', 'confeccionar');
   ligarBusca('#busca-prontos', 'prontos');
   ligarBusca('#busca-entregues', 'entregues');
+  ligarBusca('#busca-devendo', 'devendo');
   ligarBusca('#busca-usuarios', 'usuarios');
+  ligarBusca('#busca-alunos', 'alunos');
+  ligarBusca('#busca-matricula', 'matricula');
+  ligarBusca('#busca-funcionarios', 'funcionarios');
+  ligarBusca('#busca-turmas', 'turmas');
+  ligarBusca('#busca-alocacoes', 'alocacoes');
 
   /* ---------------- pedido ---------------- */
 
@@ -424,7 +1506,7 @@
       const form = $('#form-pedido');
       form.reset();
       limparErros(form);
-      $('#pedido-titulo').textContent = `Editar pedido nº ${p.id}`;
+      $('#pedido-titulo').textContent = `Editar pedido — ${p.aluno_nome}`;
       $('#pedido-via').value = String(p.via);
       $('#pedido-data').value = p.data_pedido;
       const limite = p.data_entrega || p.data_confeccao || '';
@@ -468,7 +1550,18 @@
 
   /* ---------------- exclusão de pedido ---------------- */
 
-  let excluindoId = null;
+  let excluindo = null;
+
+  function abrirConfirmacaoExclusao(alvo, resumoHtml) {
+    excluindo = alvo;
+    $('#excluir-titulo').textContent = alvo.titulo;
+    $('#excluir-resumo').innerHTML = resumoHtml;
+    $('#excluir-titulo-lista').textContent = alvo.cabecalho
+      || 'Tudo abaixo será excluído das tabelas e não poderá ser recuperado:';
+    $('#btn-confirmar-exclusao').textContent = alvo.rotulo || 'Sim, excluir';
+    $('#excluir-avisos').innerHTML = (alvo.avisosHtml || []).join('');
+    abrirModal('#modal-excluir');
+  }
 
   async function prepararExclusao(id) {
     try {
@@ -482,28 +1575,134 @@
         notificar(e.message, 'erro');
         return;
       }
-      excluindoId = id;
       const resumo = e.resumo || {};
-      $('#excluir-resumo').innerHTML =
+      abrirConfirmacaoExclusao(
+        {
+          rota: `/api/pedidos/${id}`,
+          titulo: 'Excluir pedido',
+          mensagem: `Pedido nº ${id} excluído definitivamente.`,
+        },
         `<b>${esc(resumo.aluno_nome || '')}</b> — ${esc(resumo.via_rotulo || '')}` +
-        ` · pedido nº ${esc(resumo.id !== undefined ? resumo.id : id)}` +
-        ` · ${esc(resumo.status_rotulo || '')}`;
+          ` · pedido nº ${esc(resumo.id !== undefined ? resumo.id : id)}` +
+          ` · ${esc(resumo.status_rotulo || '')}`
+      );
       $('#excluir-avisos').innerHTML = e.avisos.map((aviso) => `<li>${esc(aviso)}</li>`).join('');
-      abrirModal('#modal-excluir');
+    }
+  }
+
+  async function prepararExclusaoAluno(id) {
+    try {
+      const dados = await api('DELETE', `/api/alunos/${id}`);
+      if (dados && dados.excluido) {
+        notificar('Aluno excluído definitivamente.', 'sucesso');
+        carregarAlunos();
+      }
+    } catch (e) {
+      if (e.status !== 409 || !e.requer_confirmacao) {
+        notificar(e.message, 'erro');
+        return;
+      }
+      const resumo = e.resumo || {};
+      abrirConfirmacaoExclusao(
+        {
+          rota: `/api/alunos/${id}`,
+          titulo: 'Excluir aluno',
+          mensagem: 'Cadastro do aluno excluído definitivamente.',
+        },
+        `<b>${esc(resumo.nome || '')}</b> — CPF ${esc(resumo.cpf || '')} · cadastro nº ${esc(resumo.id !== undefined ? resumo.id : id)}`
+      );
+      $('#excluir-avisos').innerHTML = e.avisos.map((aviso) => `<li>${esc(aviso)}</li>`).join('');
+    }
+  }
+
+  async function prepararExclusaoFuncionario(id) {
+    try {
+      const dados = await api('DELETE', `/api/funcionarios/${id}`);
+      if (dados && dados.excluido) {
+        notificar('Funcionário excluído definitivamente.', 'sucesso');
+        carregarFuncionarios();
+      }
+    } catch (e) {
+      if (e.status !== 409 || !e.requer_confirmacao) {
+        notificar(e.message, 'erro');
+        return;
+      }
+      const resumo = e.resumo || {};
+      abrirConfirmacaoExclusao(
+        {
+          rota: `/api/funcionarios/${id}`,
+          titulo: 'Excluir funcionário',
+          mensagem: 'Cadastro do funcionário excluído definitivamente.',
+        },
+        `<b>${esc(resumo.nome || '')}</b> — CPF ${esc(resumo.cpf || '')} · cadastro nº ${esc(resumo.id !== undefined ? resumo.id : id)}`
+      );
+      $('#excluir-avisos').innerHTML = e.avisos.map((aviso) => `<li>${esc(aviso)}</li>`).join('');
+    }
+  }
+
+  async function prepararExclusaoTurma(id) {
+    try {
+      const dados = await api('DELETE', `/api/turmas/${id}`);
+      if (dados && dados.excluido) {
+        notificar('Turma excluída definitivamente.', 'sucesso');
+        carregarTurmas();
+      }
+    } catch (e) {
+      if (e.status !== 409 || !e.requer_confirmacao) {
+        notificar(e.message, 'erro');
+        return;
+      }
+      const resumo = e.resumo || {};
+      abrirConfirmacaoExclusao(
+        {
+          rota: `/api/turmas/${id}`,
+          titulo: 'Excluir turma',
+          mensagem: 'Turma excluída definitivamente.',
+        },
+        `<b>${esc(resumo.sigla || '')}</b> — ${esc(resumo.ano_letivo || '')} · turma nº ${esc(resumo.id !== undefined ? resumo.id : id)}`
+      );
+      $('#excluir-avisos').innerHTML = e.avisos.map((aviso) => `<li>${esc(aviso)}</li>`).join('');
+    }
+  }
+
+  async function prepararExclusaoAlocacao(id) {
+    try {
+      const dados = await api('DELETE', `/api/alocacoes/${id}`);
+      if (dados && dados.excluido) {
+        notificar('Professor removido da turma.', 'sucesso');
+        carregarAlocacoes();
+      }
+    } catch (e) {
+      if (e.status !== 409 || !e.requer_confirmacao) {
+        notificar(e.message, 'erro');
+        return;
+      }
+      const resumo = e.resumo || {};
+      abrirConfirmacaoExclusao(
+        {
+          rota: `/api/alocacoes/${id}`,
+          titulo: 'Remover professor da turma',
+          mensagem: 'Professor removido da turma.',
+        },
+        `<b>${esc(resumo.professor_nome || '')}</b> — turma ${esc(resumo.sigla || '')} · ${esc(resumo.ano_letivo || '')}`
+      );
+      $('#excluir-avisos').innerHTML = e.avisos.map((aviso) => `<li>${esc(aviso)}</li>`).join('');
     }
   }
 
   $('#btn-confirmar-exclusao').addEventListener('click', async () => {
-    if (!excluindoId) return;
+    if (!excluindo) return;
     const botao = $('#btn-confirmar-exclusao');
     botao.disabled = true;
-    const id = excluindoId;
+    const alvo = excluindo;
     try {
-      await api('DELETE', `/api/pedidos/${id}`, { confirmar: true });
-      excluindoId = null;
+      await api(alvo.metodo || 'DELETE', alvo.rota,
+        alvo.corpo === undefined ? { confirmar: true } : alvo.corpo);
+      excluindo = null;
       fecharModal($('#modal-excluir'));
-      notificar(`Pedido nº ${id} excluído definitivamente.`, 'sucesso');
-      carregarPedidos();
+      notificar(alvo.mensagem, 'sucesso');
+      if (typeof alvo.aposConfirmar === 'function') await alvo.aposConfirmar();
+      else await carregarPainel();
     } catch (e) {
       notificar(e.message, 'erro');
     } finally {
@@ -512,7 +1711,7 @@
   });
 
   $('#modal-excluir').addEventListener('click', (evento) => {
-    if (evento.target.closest('[data-fechar]')) excluindoId = null;
+    if (evento.target.closest('[data-fechar]')) excluindo = null;
   });
 
   /* ---------------- confecção ---------------- */
@@ -526,6 +1725,28 @@
     if (botao.dataset.acao === 'ver-pdf') verPdf(id, botao.dataset.pdf);
     if (botao.dataset.acao === 'editar') editarPedido(id);
     if (botao.dataset.acao === 'excluir') prepararExclusao(id);
+    if (botao.dataset.acao === 'editar-aluno') editarAluno(id);
+    if (botao.dataset.acao === 'excluir-aluno') prepararExclusaoAluno(id);
+    if (botao.dataset.acao === 'ficha-matricula') {
+      baixarFichaMatricula({
+        matriculaId: id,
+        alunoId: Number(botao.dataset.aluno),
+        turmaId: Number(botao.dataset.turma),
+      });
+    }
+    if (botao.dataset.acao === 'remover-diario') prepararExclusaoDiario(id);
+    if (botao.dataset.acao === 'corrigir-transferencia') abrirAcaoTransferenciaDiario(id, 'corrigir');
+    if (botao.dataset.acao === 'desfazer-transferencia') abrirAcaoTransferenciaDiario(id, 'desfazer');
+    if (botao.dataset.acao === 'desfazer-deixou') abrirAcaoDeixouDiario(id);
+    if (botao.dataset.acao === 'editar-funcionario') editarFuncionario(id);
+    if (botao.dataset.acao === 'excluir-funcionario') prepararExclusaoFuncionario(id);
+    if (botao.dataset.acao === 'editar-turma') editarTurma(id);
+    if (botao.dataset.acao === 'excluir-turma') prepararExclusaoTurma(id);
+    if (botao.dataset.acao === 'alocar') abrirAlocacao(id);
+    if (botao.dataset.acao === 'ver-aluno') visualizarAluno(id);
+    if (botao.dataset.acao === 'ver-funcionario') visualizarFuncionario(id);
+    if (botao.dataset.acao === 'ver-turma') visualizarTurma(id);
+    if (botao.dataset.acao === 'ver-alocacao') visualizarAlocacao(id);
   });
 
   async function prepararConfeccao(id) {
@@ -727,7 +1948,7 @@
       const form = $('#form-usuario');
       form.reset();
       limparErros(form);
-      $('#usuario-titulo').textContent = 'Editar usuário';
+      $('#usuario-titulo').textContent = `Editar usuário — ${u.nome}`;
       $('#usuario-nome').value = u.nome;
       $('#usuario-login').value = u.login;
       $('#usuario-perfil').value = u.perfil;
@@ -816,6 +2037,656 @@
       carregarUsuarios();
     } catch (e) {
       notificar(e.message, 'erro');
+    }
+  });
+
+  /* ---------------- alunos ---------------- */
+
+  const PADROES_ALUNO = {
+    estado_civil: 'Solteiro',
+    estado: 'RJ',
+    cidade: 'Campos dos Goytacazes',
+    nacionalidade: 'Brasileira',
+    pais_origem: 'Brasil',
+    estado_origem: 'RJ',
+    naturalidade: 'Campos dos Goytacazes',
+    certidao_tipo: 'Nascimento',
+  };
+
+  const cacheIbge = { estados: null, municipios: {}, todos: null };
+  let temporizadorCep = null;
+
+  async function carregarAlunos() {
+    const busca = estado.buscas.alunos;
+    const parametros = new URLSearchParams();
+    if (busca) parametros.set('q', busca);
+    try {
+      const dados = await api('GET', `/api/alunos?${parametros.toString()}`);
+      estado.listas.alunos = dados.itens;
+      renderizar('alunos', dados.itens);
+      atualizarBadgesCadastros();
+    } catch (e) {
+      if (e.status !== 401) notificar(e.message, 'erro');
+    }
+  }
+
+  async function carregarMatricula() {
+    const busca = estado.buscas.matricula;
+    const parametros = new URLSearchParams({ sem_matricula: '1' });
+    if (busca) parametros.set('q', busca);
+    try {
+      const dados = await api('GET', `/api/alunos?${parametros.toString()}&porPagina=500`);
+      estado.listas.matricula = dados.itens;
+      renderizar('matricula', dados.itens);
+      renderizarSelecionadosLote();
+      await popularSelectTurmasLote();
+    } catch (e) {
+      if (e.status !== 401) notificar(e.message, 'erro');
+    }
+  }
+
+  function atualizarCondicionaisAluno() {
+    const alergico = $('#aluno-alergico').checked;
+    $('#linha-alergia').hidden = !alergico;
+    $('#aluno-alergia_tipo').required = alergico;
+
+    const beneficio = $('#aluno-beneficio_social').checked;
+    $('#linha-beneficio').hidden = !beneficio;
+    $('#aluno-beneficio_tipo').required = beneficio;
+
+    const estrangeiro = $('#aluno-nacionalidade').value === 'Estrangeira';
+    $('#aluno-pais_origem').required = estrangeiro;
+
+    const temCondicao = $('#form-aluno [name="tem_condicao"]:checked').value === 'Sim';
+    $('#linha-condicoes').hidden = !temCondicao;
+
+    const outros = $('#form-aluno [name="def_outros"]').checked;
+    $('#linha-def-outros').hidden = !outros;
+    $('#form-aluno [name="deficiencia_outros"]').required = outros;
+
+    const acompanha = $('#form-aluno [name="acompanhamento_especial"]:checked').value === 'Sim';
+    $('#linha-acompanhamento').hidden = !acompanha;
+    $('#form-aluno [name="tipo_acompanhamento"]').required = acompanha;
+    $('#form-aluno [name="instituicao_acompanhamento"]').required = acompanha;
+
+    const transporte = $('#form-aluno [name="transporte_escolar"]:checked').value === 'Sim';
+    $('#linha-transporte').hidden = !transporte;
+  }
+
+  function abrirAlunoNovo() {
+    estado.alunoEdicao = null;
+    const form = $('#form-aluno');
+    form.reset();
+    delete form.dataset.cep;
+    limparErros(form);
+    $('#aluno-titulo').textContent = 'Novo aluno';
+    for (const [campo, valor] of Object.entries(PADROES_ALUNO)) {
+      if (form.elements[campo]) form.elements[campo].value = valor;
+    }
+    $('#aluno-numero').disabled = true;
+    atualizarCondicionaisAluno();
+    abrirModal('#modal-aluno');
+    $('#aluno-nome').focus();
+  }
+
+  async function editarAluno(id) {
+    try {
+      const a = await api('GET', `/api/alunos/${id}`);
+      estado.alunoEdicao = a;
+      const form = $('#form-aluno');
+      form.reset();
+      form.dataset.cep = soDigitos(a.cep);
+      limparErros(form);
+      $('#aluno-titulo').textContent = `Editar aluno — ${a.nome}`;
+      for (const el of form.elements) {
+        if (!el.name) continue;
+        if (el.type === 'checkbox' && el.name.startsWith('def_')) continue;
+        const valor = a[el.name];
+        if (el.type === 'checkbox') el.checked = Boolean(valor);
+        else if (el.type === 'radio') continue;
+        else if (valor !== undefined && valor !== null) el.value = valor;
+      }
+      const marcas = String(a.deficiencias || '').split('|').filter(Boolean);
+      for (const marca of marcas) {
+        const caixa = form.elements[`def_${marca}`];
+        if (caixa) caixa.checked = true;
+      }
+      if (form.elements.certidao_matricula) mascaraCertidaoMatricula(form.elements.certidao_matricula);
+      if (form.elements.cartao_sus) mascaraCartaoSus(form.elements.cartao_sus);
+      const temCondicao = Boolean(marcas.length || a.codigo_cid || a.outros_laudos);
+      form.elements.tem_condicao.value = temCondicao ? 'Sim' : 'Não';
+      form.elements.laudo_especifico.value = a.laudo_especifico ? 'Sim' : 'Não';
+      form.elements.laudo_reducao_carga.value = a.laudo_reducao_carga ? 'Sim' : 'Não';
+      form.elements.acompanhamento_especial.value = a.acompanhamento_especial ? 'Sim' : 'Não';
+      form.elements.transporte_escolar.value = a.transporte_escolar ? 'Sim' : 'Não';
+      form.elements.transporte_adaptado.value = a.transporte_adaptado ? 'Sim' : 'Não';
+      form.elements.autoriza_imagem.value = a.autoriza_imagem ? 'Sim' : 'Não';
+      const statusDevendo = a.devendo_historico || '';
+      form.querySelectorAll('[name="devendo_historico"]').forEach((el) => {
+        el.checked = el.value === statusDevendo;
+      });
+      $('#aluno-numero').disabled = false;
+      atualizarCondicionaisAluno();
+      carregarCidadesPara($('#aluno-estado').value, '#aluno-cidade', 'lista-cidades', a.cidade);
+      carregarNaturalidades($('#aluno-estado_origem').value, a.naturalidade);
+      abrirModal('#modal-aluno');
+    } catch (e) {
+      notificar(e.message, 'erro');
+    }
+  }
+
+  $('#btn-novo-aluno').addEventListener('click', abrirAlunoNovo);
+
+  $('#form-aluno').addEventListener('submit', async (evento) => {
+    evento.preventDefault();
+    const form = evento.currentTarget;
+    limparErros(form);
+
+    const corpo = {};
+    for (const [chave, valor] of new FormData(form).entries()) corpo[chave] = valor;
+    corpo.alergico = form.elements.alergico.checked;
+    corpo.filiacao1_falecido = form.elements.filiacao1_falecido.checked;
+    corpo.filiacao2_falecido = form.elements.filiacao2_falecido.checked;
+    corpo.responsavel_falecido = form.elements.responsavel_falecido.checked;
+
+    const emEdicao = Boolean(estado.alunoEdicao);
+    try {
+      let alunoSalvo;
+      if (emEdicao) alunoSalvo = await api('PUT', `/api/alunos/${estado.alunoEdicao.id}`, corpo);
+      else alunoSalvo = await api('POST', '/api/alunos', corpo);
+      fecharModal($('#modal-aluno'));
+      notificar(emEdicao ? 'Cadastro do aluno atualizado.' : 'Aluno cadastrado com sucesso.', 'sucesso');
+      estado.alunoEdicao = null;
+      carregarAlunos();
+      carregarMatricula();
+    } catch (e) {
+      if (e.campos) mostrarErros(form, e.campos, MAPA_ALUNO);
+      else notificar(e.message, 'erro');
+    }
+  });
+
+  /* CEP: consulta on-line e habilita o número */
+
+  const CONTEXTOS_CEP = {
+    'form-aluno': { campoCep: '#aluno-cep', campoNumero: '#aluno-numero', cidade: ['#aluno-cidade', 'lista-cidades'] },
+    'form-funcionario': { campoCep: '#func-cep', campoNumero: '#func-numero', cidade: ['#func-cidade', 'lista-cidades-func'] },
+  };
+
+  async function consultarCep(cep, formId) {
+    const ctx = CONTEXTOS_CEP[formId];
+    const form = document.getElementById(formId);
+    try {
+      const resposta = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+      const dados = await resposta.json();
+      if (dados.erro) throw new Error('CEP não encontrado.');
+      if (dados.logradouro) form.elements.logradouro.value = dados.logradouro;
+      if (dados.bairro) form.elements.bairro.value = dados.bairro;
+      if (dados.complemento && !form.elements.complemento.value) {
+        form.elements.complemento.value = dados.complemento;
+      }
+      if (dados.uf) form.elements.estado.value = dados.uf;
+      if (dados.localidade) form.elements.cidade.value = dados.localidade;
+      form.dataset.cep = cep;
+      $(ctx.campoNumero).disabled = false;
+      if (dados.uf) carregarCidadesPara(dados.uf, ctx.cidade[0], ctx.cidade[1], dados.localidade);
+      notificar('Endereço preenchido pelo CEP. Agora informe o número.', 'sucesso');
+    } catch {
+      $(ctx.campoNumero).disabled = false;
+      notificar('Não foi possível consultar o CEP. Preencha o endereço manualmente.', 'erro');
+    }
+  }
+
+  function agendarConsultaCep(formId) {
+    clearTimeout(temporizadorCep);
+    temporizadorCep = setTimeout(() => {
+      const ctx = CONTEXTOS_CEP[formId];
+      const form = document.getElementById(formId);
+      const cep = soDigitos($(ctx.campoCep).value);
+      if (cep.length === 8 && cep !== (form.dataset.cep || '')) consultarCep(cep, formId);
+    }, 600);
+  }
+
+  /* IBGE: cidades por UF, naturalidades e países */
+
+  async function ibgeEstados() {
+    if (!cacheIbge.estados) {
+      const resposta = await fetch('https://servicodados.ibge.gov.br/api/v1/localidades/estados');
+      if (!resposta.ok) throw new Error('IBGE indisponível');
+      cacheIbge.estados = await resposta.json();
+    }
+    return cacheIbge.estados;
+  }
+
+  async function ibgeMunicipios(uf) {
+    if (!cacheIbge.municipios[uf]) {
+      const estados = await ibgeEstados();
+      const estadoUf = estados.find((e) => e.sigla === uf);
+      if (!estadoUf) return [];
+      const resposta = await fetch(
+        `https://servicodados.ibge.gov.br/api/v1/localidades/estados/${estadoUf.id}/municipios`
+      );
+      if (!resposta.ok) throw new Error('IBGE indisponível');
+      cacheIbge.municipios[uf] = (await resposta.json()).map((m) => m.nome);
+    }
+    return cacheIbge.municipios[uf];
+  }
+
+  function preencherDatalist(id, nomes) {
+    document.getElementById(id).innerHTML = nomes.map((n) => `<option value="${esc(n)}">`).join('');
+  }
+
+  async function carregarCidadesPara(uf, campoSel, datalistId, manter) {
+    if (!uf) return;
+    try {
+      const municipios = await ibgeMunicipios(uf);
+      preencherDatalist(datalistId, municipios);
+      const campo = $(campoSel);
+      if (manter) campo.value = manter;
+      else if (!municipios.includes(campo.value)) campo.value = '';
+    } catch {
+      /* offline: o usuário digita a cidade manualmente */
+    }
+  }
+
+  async function carregarNaturalidades(uf, manter) {
+    if (!uf) return;
+    try {
+      const municipios = await ibgeMunicipios(uf);
+      preencherDatalist('lista-naturalidades', municipios);
+      const campo = $('#aluno-naturalidade');
+      if (manter) campo.value = manter;
+      else if (!municipios.includes(campo.value)) campo.value = '';
+    } catch {
+      /* offline: o usuário digita a naturalidade manualmente */
+    }
+  }
+
+  async function carregarPaises() {
+    try {
+      const resposta = await fetch('https://servicodados.ibge.gov.br/api/v1/localidades/paises');
+      if (!resposta.ok) throw new Error('IBGE indisponível');
+      const paises = (await resposta.json())
+        .map((p) => p.nome)
+        .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+      const seletor = $('#aluno-pais_origem');
+      const atual = seletor.value;
+      seletor.innerHTML = paises.map((p) => `<option value="${esc(p)}">${esc(p)}</option>`).join('');
+      seletor.value = paises.includes(atual) ? atual : 'Brasil';
+    } catch {
+      /* offline: o combo mantém Brasil */
+    }
+  }
+
+  $('#aluno-estado').addEventListener('change', () =>
+    carregarCidadesPara($('#aluno-estado').value, '#aluno-cidade', 'lista-cidades')
+  );
+  $('#aluno-estado_origem').addEventListener('change', () =>
+    carregarNaturalidades($('#aluno-estado_origem').value)
+  );
+  $('#aluno-logradouro').addEventListener('input', () => { $('#aluno-numero').disabled = false; });
+  $('#aluno-alergico').addEventListener('change', atualizarCondicionaisAluno);
+  $('#aluno-beneficio_social').addEventListener('change', atualizarCondicionaisAluno);
+  $('#aluno-nacionalidade').addEventListener('change', atualizarCondicionaisAluno);
+  $('#aluno-filiacao1_nome').addEventListener('input', atualizarCondicionaisAluno);
+  $('#aluno-filiacao2_nome').addEventListener('input', atualizarCondicionaisAluno);
+  $('#aluno-ue_origem').addEventListener('blur', () => {
+    $('#aluno-ue_municipio').value = $('#aluno-ue_origem').value.trim()
+      ? 'Campos dos Goytacazes/RJ' : '';
+  });
+  $$('#form-aluno [name="tem_condicao"]').forEach((el) =>
+    el.addEventListener('change', atualizarCondicionaisAluno)
+  );
+  $$('#form-aluno [name="laudo_especifico"], #form-aluno [name="laudo_reducao_carga"], #form-aluno [name="acompanhamento_especial"], #form-aluno [name="transporte_escolar"]')
+    .forEach((el) => el.addEventListener('change', atualizarCondicionaisAluno));
+  $('#form-aluno [name="def_outros"]').addEventListener('change', atualizarCondicionaisAluno);
+
+  carregarPaises();
+
+  /* ---------------- funcionários ---------------- */
+
+  const UFS_NOMES = {
+    AC: 'Acre', AL: 'Alagoas', AP: 'Amapá', AM: 'Amazonas', BA: 'Bahia', CE: 'Ceará',
+    DF: 'Distrito Federal', ES: 'Espírito Santo', GO: 'Goiás', MA: 'Maranhão', MT: 'Mato Grosso',
+    MS: 'Mato Grosso do Sul', MG: 'Minas Gerais', PA: 'Pará', PB: 'Paraíba', PR: 'Paraná',
+    PE: 'Pernambuco', PI: 'Piauí', RN: 'Rio Grande do Norte', RS: 'Rio Grande do Sul',
+    RJ: 'Rio de Janeiro', RO: 'Rondônia', RR: 'Roraima', SC: 'Santa Catarina',
+    SP: 'São Paulo', SE: 'Sergipe', TO: 'Tocantins',
+  };
+
+  const PADROES_FUNCIONARIO = {
+    nacionalidade: 'Brasileiro Nato',
+    estado_civil: 'Solteiro',
+    naturalidade: 'Campos dos Goytacazes / RJ',
+    estado: 'RJ',
+    cidade: 'Campos dos Goytacazes',
+  };
+
+  function preencherUfsFuncionario() {
+    const opcoes = '<option value="" selected>—</option>' +
+      Object.entries(UFS_NOMES)
+        .map(([sigla, nome]) => `<option value="${sigla}">${nome}</option>`)
+        .join('');
+    $('#form-funcionario select[name="estado"]').innerHTML = opcoes;
+    $('#form-funcionario select[name="rg_estado_emissor"]').innerHTML = opcoes;
+  }
+
+  async function carregarFuncionarios() {
+    const busca = estado.buscas.funcionarios;
+    const parametros = new URLSearchParams();
+    if (busca) parametros.set('q', busca);
+    try {
+      const dados = await api('GET', `/api/funcionarios?${parametros.toString()}`);
+      estado.listas.funcionarios = dados.itens;
+      renderizar('funcionarios', dados.itens);
+      atualizarBadgesCadastros();
+    } catch (e) {
+      if (e.status !== 401) notificar(e.message, 'erro');
+    }
+  }
+
+  async function carregarTurmas() {
+    const busca = estado.buscas.turmas;
+    const parametros = new URLSearchParams();
+    if (busca) parametros.set('q', busca);
+    try {
+      const dados = await api('GET', `/api/turmas?${parametros.toString()}`);
+      estado.listas.turmas = dados.itens;
+      renderizar('turmas', dados.itens);
+      atualizarBadgesCadastros();
+    } catch (e) {
+      if (e.status !== 401) notificar(e.message, 'erro');
+    }
+  }
+
+  function atualizarCondicionaisFuncionario() {
+    const acumula = $('#form-funcionario [name="acumulacao_cargo"]:checked').value === 'Sim';
+    $('#linha-acum').hidden = !acumula;
+    ['acum_cargo', 'acum_funcao', 'acum_matricula', 'acum_local'].forEach((campo) => {
+      $(`#form-funcionario [name="${campo}"]`).required = acumula;
+    });
+  }
+
+  function atualizarStatusFuncionario() {
+    const situacao = $('#form-funcionario [name="status"]:checked');
+    const inativo = Boolean(situacao && situacao.value === 'inativo');
+    const alocado = Boolean(estado.funcionarioEdicao && estado.funcionarioEdicao.alocacao_ativa);
+    const mostrar = Boolean(inativo && alocado);
+    $('#linha-data-inativacao').hidden = !mostrar;
+    const campoData = $('#form-funcionario [name="data_inativacao"]');
+    campoData.required = mostrar;
+    if (!mostrar) campoData.value = '';
+  }
+
+  async function carregarNaturalidadesFunc() {
+    const datalist = 'lista-naturalidades-func';
+    if (cacheIbge.todos) {
+      preencherDatalist(datalist, cacheIbge.todos);
+      return;
+    }
+    try {
+      const resposta = await fetch('https://servicodados.ibge.gov.br/api/v1/localidades/municipios');
+      if (!resposta.ok) throw new Error('IBGE indisponível');
+      const municipios = await resposta.json();
+      const lista = municipios
+        .map((m) => {
+          const uf =
+            (m['regiao-imediata'] && m['regiao-imediata']['regiao-intermediaria'] &&
+              m['regiao-imediata']['regiao-intermediaria'].UF &&
+              m['regiao-imediata']['regiao-intermediaria'].UF.sigla) ||
+            (m.microrregiao && m.microrregiao.mesorregiao &&
+              m.microrregiao.mesorregiao.UF && m.microrregiao.mesorregiao.UF.sigla) ||
+            '';
+          return uf ? `${m.nome}/${uf}` : m.nome;
+        })
+        .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+      cacheIbge.todos = lista;
+      preencherDatalist(datalist, lista);
+    } catch {
+      /* offline: o usuário digita a naturalidade manualmente */
+    }
+  }
+
+  function abrirFuncionarioNovo() {
+    estado.funcionarioEdicao = null;
+    const form = $('#form-funcionario');
+    form.reset();
+    delete form.dataset.cep;
+    limparErros(form);
+    $('#funcionario-titulo').textContent = 'Novo funcionário';
+    for (const [campo, valor] of Object.entries(PADROES_FUNCIONARIO)) {
+      if (form.elements[campo]) form.elements[campo].value = valor;
+    }
+    $('#func-numero').disabled = true;
+    atualizarCondicionaisFuncionario();
+    atualizarStatusFuncionario();
+    carregarNaturalidadesFunc();
+    abrirModal('#modal-funcionario');
+    $('#func-nome').focus();
+  }
+
+  async function editarFuncionario(id) {
+    try {
+      const f = await api('GET', `/api/funcionarios/${id}`);
+      estado.funcionarioEdicao = f;
+      const form = $('#form-funcionario');
+      form.reset();
+      limparErros(form);
+      $('#funcionario-titulo').textContent = `Editar funcionário — ${f.nome}`;
+      for (const el of form.elements) {
+        if (!el.name) continue;
+        if (el.type === 'radio') {
+          if (el.name === 'status') el.checked = el.value === (f.status || 'ativo');
+          else el.checked = el.value === (f.acumulacao_cargo ? 'Sim' : 'Não');
+        } else if (el.type === 'checkbox') {
+          el.checked = Boolean(f.cursos && f.cursos.includes(el.value));
+        } else {
+          const valor = f[el.name];
+          if (valor !== undefined && valor !== null) el.value = valor;
+        }
+      }
+      form.dataset.cep = soDigitos(f.cep);
+      $('#func-numero').disabled = false;
+      atualizarCondicionaisFuncionario();
+      atualizarStatusFuncionario();
+      carregarCidadesPara($('#func-estado').value, '#func-cidade', 'lista-cidades-func', f.cidade);
+      carregarNaturalidadesFunc();
+      abrirModal('#modal-funcionario');
+    } catch (e) {
+      notificar(e.message, 'erro');
+    }
+  }
+
+  $('#btn-novo-funcionario').addEventListener('click', abrirFuncionarioNovo);
+
+  $('#btn-importar-funcionarios').addEventListener('click', () => {
+    $('#importar-funcionarios-arquivo').click();
+  });
+
+  $('#importar-funcionarios-arquivo').addEventListener('change', async (evento) => {
+    const arquivo = evento.target.files && evento.target.files[0];
+    evento.target.value = '';
+    if (!arquivo) return;
+    try {
+      const texto = await arquivo.text();
+      const dados = await api('POST', '/api/funcionarios/importar', texto, {
+        bruto: true,
+        tipoCorpo: 'text/csv; charset=utf-8',
+      });
+      notificar(`${dados.importados} funcionário(s) importado(s) com sucesso.`, 'sucesso');
+      carregarFuncionarios();
+    } catch (e) {
+      if (e.erros && e.erros.length) {
+        const detalhes = e.erros
+          .slice(0, 3)
+          .map((item) => `linha ${item.linha}: ${Object.values(item.campos).join('; ')}`)
+          .join(' | ');
+        const excesso = e.erros.length > 3 ? ' …' : '';
+        notificar(`${e.message} ${detalhes}${excesso}`, 'erro');
+        console.warn('Problemas na importação:', e.erros);
+      } else if (e.status !== 401) {
+        notificar(e.message, 'erro');
+      }
+    }
+  });
+
+  $('#form-funcionario').addEventListener('submit', async (evento) => {
+    evento.preventDefault();
+    const form = evento.currentTarget;
+    limparErros(form);
+
+    const dados = new FormData(form);
+    const corpo = {};
+    for (const [chave, valor] of dados.entries()) corpo[chave] = valor;
+    corpo.cursos = dados.getAll('cursos');
+    corpo.acumulacao_cargo = form.elements.acumulacao_cargo.value === 'Sim';
+
+    const emEdicao = Boolean(estado.funcionarioEdicao);
+    try {
+      if (emEdicao) await api('PUT', `/api/funcionarios/${estado.funcionarioEdicao.id}`, corpo);
+      else await api('POST', '/api/funcionarios', corpo);
+      fecharModal($('#modal-funcionario'));
+      notificar(
+        emEdicao ? 'Cadastro do funcionário atualizado.' : 'Funcionário cadastrado com sucesso.',
+        'sucesso'
+      );
+      estado.funcionarioEdicao = null;
+      carregarFuncionarios();
+    } catch (e) {
+      if (e.campos) mostrarErros(form, e.campos, MAPA_FUNCIONARIO);
+      else notificar(e.message, 'erro');
+    }
+  });
+
+  $('#form-funcionario').addEventListener('change', (evento) => {
+    const alvo = evento.target;
+    if (alvo.name === 'acumulacao_cargo') atualizarCondicionaisFuncionario();
+    if (alvo.name === 'status') atualizarStatusFuncionario();
+    if (alvo.name === 'cursos') {
+      if (alvo.id === 'func-curso-nenhum' && alvo.checked) {
+        $$('#form-funcionario [name="cursos"]').forEach((c) => {
+          if (c !== alvo) c.checked = false;
+        });
+      } else if (alvo.checked) {
+        $('#func-curso-nenhum').checked = false;
+      }
+    }
+  });
+
+  $('#func-estado').addEventListener('change', () =>
+    carregarCidadesPara($('#func-estado').value, '#func-cidade', 'lista-cidades-func')
+  );
+  $('#func-logradouro').addEventListener('input', () => { $('#func-numero').disabled = false; });
+
+  preencherUfsFuncionario();
+
+  /* ---------------- administração ---------------- */
+
+  const MAPA_ANO_LETIVO = {
+    data_inicio: '#ano-letivo-inicio',
+    data_fim: '#ano-letivo-fim',
+    data_base_censo: '#ano-letivo-censo',
+  };
+
+  // Última quarta-feira de maio do ano corrente (padrão da Data Base CENSO).
+  function dataBaseCensoPadrao() {
+    const hoje = new Date();
+    const quarta = new Date(hoje.getFullYear(), 4, 31);
+    while (quarta.getDay() !== 3) quarta.setDate(quarta.getDate() - 1);
+    const a = String(quarta.getFullYear());
+    const m = String(quarta.getMonth() + 1).padStart(2, '0');
+    const d = String(quarta.getDate()).padStart(2, '0');
+    return `${a}-${m}-${d}`;
+  }
+
+  function preencherCensoPadrao() {
+    const campo = $('#ano-letivo-censo');
+    if (campo && !campo.value) campo.value = dataBaseCensoPadrao();
+  }
+
+  async function carregarAdministracao() {
+    preencherCensoPadrao();
+    try {
+      const dados = await api('GET', '/api/ano-letivo');
+      $('#ano-letivo-inicio').value = dados.data_inicio || '';
+      $('#ano-letivo-fim').value = dados.data_fim || '';
+      $('#ano-letivo-censo').value = dados.data_base_censo || dataBaseCensoPadrao();
+      const temPdf = Boolean(dados.calendario_arquivo);
+      $('#calendario-atual-status').textContent = temPdf
+        ? `Calendário anexado: ${dados.calendario_arquivo}`
+        : 'Nenhum calendário anexado.';
+      $('#calendario-atual-link').hidden = !temPdf;
+    } catch (e) {
+      if (e.status !== 401) notificar(e.message, 'erro');
+    }
+  }
+
+  async function carregarCalendario() {
+    try {
+      const dados = await api('GET', '/api/ano-letivo');
+      const temPdf = Boolean(dados.calendario_arquivo);
+      $('#calendario-vazio').hidden = temPdf;
+      $('#calendario-pdf').hidden = !temPdf;
+      $('#calendario-link').hidden = !temPdf;
+      if (temPdf) {
+        $('#calendario-pdf').src = `/api/ano-letivo/calendario?v=${Date.now()}`;
+        $('#calendario-info').textContent =
+          `Calendário do ano letivo (${formatarData(dados.data_inicio)} – ${formatarData(dados.data_fim)}) — ${dados.calendario_arquivo}`;
+      } else {
+        $('#calendario-pdf').removeAttribute('src');
+        $('#calendario-info').textContent = '';
+        $('#calendario-vazio').textContent =
+          estado.usuario && estado.usuario.perfil === 'admin'
+            ? 'Nenhum calendário foi anexado ao ano letivo. Anexe o PDF em Administração → Calendário (PDF).'
+            : 'Nenhum calendário foi anexado ao ano letivo.';
+      }
+    } catch (e) {
+      if (e.status !== 401) notificar(e.message, 'erro');
+    }
+  }
+
+  $('#form-ano-letivo').addEventListener('submit', async (evento) => {
+    evento.preventDefault();
+    const form = evento.currentTarget;
+    limparErros(form);
+    try {
+      await api('PUT', '/api/ano-letivo', {
+        data_inicio: form.elements.data_inicio.value,
+        data_fim: form.elements.data_fim.value,
+        data_base_censo: form.elements.data_base_censo.value,
+      });
+      notificar('Ano letivo salvo com sucesso.', 'sucesso');
+      await carregarAdministracao();
+    } catch (e) {
+      if (e.campos) mostrarErros(form, e.campos, MAPA_ANO_LETIVO);
+      else if (e.status !== 401) notificar(e.message, 'erro');
+    }
+  });
+
+  $('#btn-anexar-calendario').addEventListener('click', () => {
+    if (!$('#ano-letivo-inicio').value || !$('#ano-letivo-fim').value) {
+      notificar('Salve o período do ano letivo antes de anexar o calendário.', 'erro');
+      return;
+    }
+    $('#anexar-calendario-arquivo').click();
+  });
+
+  $('#anexar-calendario-arquivo').addEventListener('change', async (evento) => {
+    const arquivo = evento.target.files && evento.target.files[0];
+    evento.target.value = '';
+    if (!arquivo) return;
+    if (!/\.pdf$/i.test(arquivo.name)) {
+      notificar('Selecione um arquivo no formato PDF.', 'erro');
+      return;
+    }
+    try {
+      await api('POST', `/api/ano-letivo/calendario?nome=${encodeURIComponent(arquivo.name)}`, arquivo, {
+        bruto: true,
+        tipoCorpo: 'application/pdf',
+      });
+      notificar('Calendário anexado com sucesso.', 'sucesso');
+      await carregarAdministracao();
+    } catch (e) {
+      if (e.status !== 401) notificar(e.message, 'erro');
     }
   });
 
@@ -930,18 +2801,595 @@
   /* ---------------- máscaras ---------------- */
 
   document.addEventListener('input', (evento) => {
-    if (evento.target.id === 'pedido-cpf' || evento.target.id === 'entrega-cpf') {
-      mascaraCPF(evento.target);
+    const alvo = evento.target;
+    if (alvo.id === 'pedido-cpf' || alvo.id === 'entrega-cpf') {
+      mascaraCPF(alvo);
     }
-    if (evento.target.id === 'pedido-telefone') {
-      mascaraTelefone(evento.target);
+    if (alvo.id === 'pedido-telefone') {
+      mascaraTelefone(alvo);
     }
-    if (evento.target.id === 'escola-inep-campo') {
-      evento.target.value = soDigitos(evento.target.value).slice(0, 8);
+    if (alvo.id === 'escola-inep-campo') {
+      alvo.value = soDigitos(alvo.value).slice(0, 8);
+    }
+    if (alvo.dataset.mask === 'cpf') mascaraCPF(alvo);
+    if (alvo.dataset.mask === 'telefone') mascaraTelefone(alvo);
+    if (alvo.dataset.mask === 'digitos') alvo.value = soDigitos(alvo.value);
+    if (alvo.dataset.mask === 'certidao') mascaraCertidaoMatricula(alvo);
+    if (alvo.dataset.mask === 'sus') mascaraCartaoSus(alvo);
+    if (alvo.dataset.mask === 'cep') {
+      const digitos = soDigitos(alvo.value).slice(0, 8);
+      alvo.value = digitos.length > 5 ? `${digitos.slice(0, 5)}-${digitos.slice(5)}` : digitos;
+      const formPai = alvo.closest('form');
+      if (formPai && CONTEXTOS_CEP[formPai.id]) agendarConsultaCep(formPai.id);
     }
   });
 
   /* ---------------- inicialização ---------------- */
+
+  /* ---------------- turmas ---------------- */
+
+  const MATRIZES_TURMA = [
+    'Educação Infantil',
+    'Ensino Fundamental (Anos Iniciais)',
+    'Ensino Fundamental (Anos Finais)',
+  ];
+
+  const ANOS_POR_MATRIZ_TURMA = {
+    'Educação Infantil': ['Grupo 1', 'Grupo 2', 'Grupo 3', 'Pré 1', 'Pré 2'],
+    'Ensino Fundamental (Anos Iniciais)': ['1º ano', '2º ano', '3º ano', '4º ano', '5º ano'],
+    'Ensino Fundamental (Anos Finais)': ['6º ano', '7º ano', '8º ano', '9º ano'],
+  };
+
+  const MAPA_TURMA = {
+    ano_letivo: '#turma-ano_letivo',
+    matriz: '#turma-matriz',
+    ano_escolaridade: '#turma-ano_escolaridade',
+    sigla: '#turma-sigla',
+    turno: '#turma-turno',
+    tipo_turma: '#form-turma [name="tipo_turma"]',
+  };
+
+  function anosLetivosTurma(manter) {
+    const atual = new Date().getFullYear();
+    const anos = [atual - 1, atual, atual + 1];
+    if (manter && !anos.includes(Number(manter))) anos.unshift(Number(manter));
+    return anos;
+  }
+
+  function popularAnoLetivoTurma(manter) {
+    $('#turma-ano_letivo').innerHTML = anosLetivosTurma(manter)
+      .map((a) => `<option value="${a}">${a}</option>`)
+      .join('');
+    $('#turma-ano_letivo').value = String(manter || new Date().getFullYear());
+  }
+
+  function popularMatrizTurma(manter) {
+    $('#turma-matriz').innerHTML = MATRIZES_TURMA
+      .map((m) => `<option value="${esc(m)}">${esc(m)}</option>`)
+      .join('');
+    if (manter) $('#turma-matriz').value = manter;
+  }
+
+  function popularAnoEscolaridadeTurma(matriz, manter) {
+    const anos = ANOS_POR_MATRIZ_TURMA[matriz] || [];
+    $('#turma-ano_escolaridade').innerHTML = anos
+      .map((a) => `<option value="${esc(a)}">${esc(a)}</option>`)
+      .join('');
+    if (manter && anos.includes(manter)) $('#turma-ano_escolaridade').value = manter;
+  }
+
+  function prepararFormularioTurma() {
+    popularAnoLetivoTurma();
+    popularMatrizTurma();
+    popularAnoEscolaridadeTurma(MATRIZES_TURMA[0]);
+    $('#turma-turno').value = 'Manhã';
+    $$('#form-turma [name="tipo_turma"]').forEach((r) => { r.checked = false; });
+  }
+
+  $('#btn-nova-turma').addEventListener('click', () => {
+    estado.turmaEdicao = null;
+    const form = $('#form-turma');
+    form.reset();
+    limparErros(form);
+    $('#turma-titulo').textContent = 'Nova turma';
+    prepararFormularioTurma();
+    abrirModal('#modal-turma');
+    $('#turma-sigla').focus();
+  });
+
+  async function editarTurma(id) {
+    try {
+      const t = await api('GET', `/api/turmas/${id}`);
+      estado.turmaEdicao = t;
+      const form = $('#form-turma');
+      form.reset();
+      limparErros(form);
+      $('#turma-titulo').textContent = `Editar turma — ${t.sigla}`;
+      popularAnoLetivoTurma(t.ano_letivo);
+      popularMatrizTurma(t.matriz);
+      popularAnoEscolaridadeTurma(t.matriz, t.ano_escolaridade);
+      $('#turma-sigla').value = t.sigla;
+      $('#turma-turno').value = t.turno;
+      $$('#form-turma [name="tipo_turma"]').forEach((r) => { r.checked = r.value === t.tipo_turma; });
+      abrirModal('#modal-turma');
+    } catch (e) {
+      notificar(e.message, 'erro');
+    }
+  }
+
+  $('#turma-matriz').addEventListener('change', () => {
+    popularAnoEscolaridadeTurma($('#turma-matriz').value);
+  });
+
+  $('#form-turma').addEventListener('submit', async (evento) => {
+    evento.preventDefault();
+    const form = evento.currentTarget;
+    limparErros(form);
+    const edicao = estado.turmaEdicao;
+    const tipo = $('#form-turma [name="tipo_turma"]:checked');
+    const corpo = {
+      ano_letivo: Number($('#turma-ano_letivo').value),
+      matriz: $('#turma-matriz').value,
+      ano_escolaridade: $('#turma-ano_escolaridade').value,
+      sigla: $('#turma-sigla').value,
+      turno: $('#turma-turno').value,
+      tipo_turma: tipo ? tipo.value : null,
+    };
+    try {
+      if (edicao) await api('PUT', `/api/turmas/${edicao.id}`, corpo);
+      else await api('POST', '/api/turmas', corpo);
+      fecharModal($('#modal-turma'));
+      notificar(edicao ? 'Turma atualizada com sucesso.' : 'Turma cadastrada com sucesso.', 'sucesso');
+      estado.turmaEdicao = null;
+      carregarTurmas();
+    } catch (e) {
+      if (e.campos) mostrarErros(form, e.campos, MAPA_TURMA);
+      else notificar(e.message, 'erro');
+    }
+  });
+
+  /* ---------------- alocação de professores ---------------- */
+
+  async function carregarAlocacoes() {
+    const busca = estado.buscas.alocacoes;
+    const parametros = new URLSearchParams();
+    if (busca) parametros.set('q', busca);
+    try {
+      const dados = await api('GET', `/api/alocacoes?${parametros.toString()}`);
+      estado.alocacoes = { turmas: dados.turmas, professores: dados.professores };
+      renderizar('alocacoes', dados.turmas);
+      $('#badge-alocacoes').textContent = dados.total_alocacoes;
+      if (!$('#modal-alocacao').hidden && estado.alocacaoTurmaId !== null) renderizarListaAlocacao();
+      atualizarBadgesCadastros();
+    } catch (e) {
+      if (e.status !== 401) notificar(e.message, 'erro');
+    }
+  }
+
+  function turmaAlocacaoAberta() {
+    return (estado.alocacoes.turmas || []).find((t) => t.id === estado.alocacaoTurmaId);
+  }
+
+  const MAPA_ALOCACAO = {
+    professor: '#alocacao-professor',
+    data_inicio: '#alocacao-data-inicio',
+    data_fim: '#alocacao-data-fim',
+  };
+
+  function renderizarListaAlocacao() {
+    const turma = turmaAlocacaoAberta();
+    if (!turma) return;
+    $('#alocacao-resumo').textContent =
+      `Turma ${turma.sigla} — ${turma.ano_escolaridade} · ${turma.matriz} · turno ${turma.turno} · ${turma.ano_letivo}`;
+
+    const podeRemover = estado.usuario && estado.usuario.perfil === 'admin';
+    const alocados = turma.professores || [];
+    $('#alocacao-lista').innerHTML = alocados.length
+      ? alocados.map((prof) => `
+        <div class="alocacao-item">
+          <span>${esc(prof.professor_nome)} <span class="pill ${prof.ativo ? 'verde' : 'ambar'}">${prof.ativo ? 'Ativo' : 'Inativo'}</span>${
+            prof.data_inicio && prof.data_fim
+              ? `<span class="secundario">${formatarData(prof.data_inicio)} – ${formatarData(prof.data_fim)}</span>`
+              : ''
+          }</span>
+          <span class="alocacao-botoes">
+            <button type="button" class="btn mini" data-aloc-alternar="${prof.id}">${prof.ativo ? 'Inativar' : 'Ativar'}</button>
+            ${podeRemover ? `<button type="button" class="btn mini perigo" data-aloc-remover="${prof.id}">Remover</button>` : ''}
+          </span>
+        </div>`).join('')
+      : '<p class="secundario">Nenhum professor alocado nesta turma.</p>';
+
+    const jaAlocados = new Set(alocados.map((p) => p.professor_id));
+    const disponiveis = (estado.alocacoes.professores || []).filter((f) => !jaAlocados.has(f.id));
+    $('#alocacao-professor').innerHTML = disponiveis.length
+      ? '<option value="">Selecione o professor…</option>' +
+        disponiveis.map((f) =>
+          `<option value="${f.id}">${esc(f.nome)}${f.funcao ? ` — ${esc(f.funcao)}` : ''}</option>`
+        ).join('')
+      : '<option value="">Nenhum professor disponível</option>';
+  }
+
+  async function preencherPeriodoAlocacao() {
+    try {
+      const ano = await api('GET', '/api/ano-letivo');
+      if (ano.configurado) {
+        $('#alocacao-data-inicio').value = ano.data_inicio;
+        $('#alocacao-data-fim').value = ano.data_fim;
+      }
+    } catch {
+      /* sem ano letivo cadastrado: o usuário informa as datas */
+    }
+  }
+
+  async function abrirAlocacao(turmaId) {
+    estado.alocacaoTurmaId = turmaId;
+    const turma = turmaAlocacaoAberta();
+    if (!turma) return;
+    $('#alocacao-titulo').textContent = `Alocar professores — ${turma.sigla}`;
+    const form = $('#form-alocacao');
+    form.reset();
+    limparErros(form);
+    renderizarListaAlocacao();
+    await preencherPeriodoAlocacao();
+    abrirModal('#modal-alocacao');
+  }
+
+  $('#form-alocacao').addEventListener('submit', async (evento) => {
+    evento.preventDefault();
+    const form = evento.currentTarget;
+    limparErros(form);
+    const corpo = {
+      turma_id: estado.alocacaoTurmaId,
+      professor_id: Number($('#alocacao-professor').value) || null,
+      ativo: $('#form-alocacao [name="alocacao_situacao"]:checked').value === '1',
+      data_inicio: $('#alocacao-data-inicio').value,
+      data_fim: $('#alocacao-data-fim').value,
+    };
+    try {
+      await api('POST', '/api/alocacoes', corpo);
+      notificar('Professor alocado com sucesso.', 'sucesso');
+      fecharModal($('#modal-alocacao'));
+      await carregarAlocacoes();
+      form.reset();
+      limparErros(form);
+      await preencherPeriodoAlocacao();
+    } catch (e) {
+      if (e.campos) mostrarErros(form, e.campos, MAPA_ALOCACAO);
+      else notificar(e.message, 'erro');
+    }
+  });
+
+  $('#modal-alocacao').addEventListener('click', async (evento) => {
+    const alternar = evento.target.closest('[data-aloc-alternar]');
+    const remover = evento.target.closest('[data-aloc-remover]');
+    if (alternar) {
+      const alocacaoId = Number(alternar.dataset.alocAlternar);
+      const turma = turmaAlocacaoAberta();
+      const prof = (turma && turma.professores || []).find((p) => p.id === alocacaoId);
+      if (!prof) return;
+      try {
+        await api('PUT', `/api/alocacoes/${alocacaoId}`, { ativo: !prof.ativo });
+        await carregarAlocacoes();
+      } catch (e) {
+        notificar(e.message, 'erro');
+      }
+    }
+    if (remover) prepararExclusaoAlocacao(Number(remover.dataset.alocRemover));
+  });
+
+  /* ---------------- matrícula de aluno ---------------- */
+
+  async function popularSelectTurmasLote() {
+    const anoAtual = new Date().getFullYear();
+    const dados = await api('GET', '/api/turmas?porPagina=500');
+    const select = $('#matricular-lote-turma');
+    const opcoes = ['<option value="">— Selecione a turma —</option>'];
+    for (const t of dados.itens) {
+      if (t.ano_letivo !== anoAtual) continue;
+      const tipo = t.tipo_turma ? ` · ${t.tipo_turma}` : '';
+      opcoes.push(`<option value="${t.id}">${esc(t.sigla)} — ${esc(t.ano_escolaridade)} · ${esc(t.turno)}${tipo} · ${t.ano_letivo}</option>`);
+    }
+    select.innerHTML = opcoes.join('');
+  }
+
+  function selecionadosDoLote() {
+    return [...estado.matriculaLote.ids]
+      .map((id) => estado.matriculaLote.selecionados.get(id))
+      .filter(Boolean);
+  }
+
+  function renderizarSelecionadosLote() {
+    const lista = $('#matricula-selecionados');
+    const vazio = $('#vazio-selecionados');
+    const alunos = selecionadosDoLote();
+    $('#matricular-lote-contador').textContent = alunos.length;
+    $('#btn-matricular-lote').hidden = alunos.length === 0;
+    if (alunos.length === 0) {
+      lista.innerHTML = '';
+      vazio.hidden = false;
+      return;
+    }
+    vazio.hidden = true;
+    lista.innerHTML = alunos.map((a) => `<li>
+        <span class="nome-selecionado"><b>${esc(a.nome)}</b> — ${esc(a.cpf)}</span>
+        <label class="campo data-lote"><span>Data da matrícula</span>
+          <input type="date" data-campo="data-lote" data-id="${a.id}" value="${a.data || dataHoje()}"></label>
+        <button type="button" class="btn mini perigo" data-acao="remover-lote" data-id="${a.id}">Remover</button>
+      </li>`).join('');
+  }
+
+  function adicionarAoLote(id) {
+    if (estado.matriculaLote.ids.has(id)) {
+      notificar('Este aluno já está na lista de selecionados.', 'info');
+      return;
+    }
+    const aluno = estado.listas.matricula.find((x) => x.id === id);
+    if (!aluno) return;
+    estado.matriculaLote.ids.add(id);
+    estado.matriculaLote.selecionados.set(id, {
+      id: aluno.id, nome: aluno.nome, cpf: aluno.cpf, data: dataHoje(),
+    });
+    renderizarSelecionadosLote();
+
+    const busca = $('#busca-matricula');
+    if (busca) {
+      busca.value = '';
+      estado.buscas.matricula = '';
+      busca.focus();
+      carregarMatricula();
+    }
+  }
+
+  function removerDoLote(id) {
+    estado.matriculaLote.ids.delete(id);
+    estado.matriculaLote.selecionados.delete(id);
+    renderizarSelecionadosLote();
+  }
+
+  $('#matricula-selecionados').addEventListener('change', (evento) => {
+    const alvo = evento.target;
+    if (alvo.dataset.campo !== 'data-lote') return;
+    const registro = estado.matriculaLote.selecionados.get(Number(alvo.dataset.id));
+    if (!registro) return;
+    registro.data = alvo.value || dataHoje();
+  });
+
+  document.addEventListener('click', (evento) => {
+    const botao = evento.target.closest('[data-acao]');
+    if (!botao) return;
+    const id = Number(botao.dataset.id);
+    if (botao.dataset.acao === 'adicionar-lote') adicionarAoLote(id);
+    if (botao.dataset.acao === 'remover-lote') removerDoLote(id);
+  });
+
+  $('#btn-matricula-novo-aluno').addEventListener('click', () => abrirAlunoNovo());
+
+  $('#btn-matricular-lote').addEventListener('click', async () => {
+    const alunos = selecionadosDoLote();
+    if (alunos.length === 0) return;
+    const turmaId = Number($('#matricular-lote-turma').value) || null;
+    if (!turmaId) {
+      notificar('Selecione a turma para matricular os alunos selecionados.', 'erro');
+      return;
+    }
+    let matriculados = 0;
+    const falhas = [];
+    for (const aluno of alunos) {
+      try {
+        await api('POST', '/api/matriculas', {
+          aluno_id: aluno.id, turma_id: turmaId, data_inicio: aluno.data || dataHoje(),
+        });
+        matriculados += 1;
+      } catch (e) {
+        falhas.push(`${aluno.nome}: ${e.message}`);
+      }
+    }
+    estado.matriculaLote.ids.clear();
+    estado.matriculaLote.selecionados.clear();
+    renderizarSelecionadosLote();
+    if (matriculados > 0) notificar(`${matriculados} aluno(s) matriculado(s) com sucesso.`, 'sucesso');
+    if (falhas.length > 0) notificar(`Não foi possível matricular ${falhas.length} aluno(s):\n${falhas.join('\n')}`, 'erro');
+    carregarMatricula();
+  });
+
+  /* ---------------- diário da turma ---------------- */
+
+  async function carregarDiario() {
+    const selectAno = $('#diario-ano-letivo');
+    if (!selectAno.dataset.populado) {
+      try {
+        const dados = await api('GET', '/api/turmas?porPagina=500');
+        const anos = [...new Set((dados.itens || []).map((t) => t.ano_letivo))].sort((a, b) => b - a);
+        const anoAtual = new Date().getFullYear();
+        selectAno.innerHTML = '<option value="">— Selecione o ano letivo —</option>' +
+          anos.map((a) => `<option value="${a}"${a === anoAtual ? ' selected' : ''}>${a}</option>`).join('');
+        selectAno.dataset.populado = '1';
+      } catch (e) {
+        if (e.status !== 401) notificar(e.message, 'erro');
+        return;
+      }
+    }
+    await popularSelectTurmaDiario();
+    if (estado.diario.turmaId) {
+      const turmaSelecionada = Number($('#diario-turma').value) || null;
+      if (turmaSelecionada === estado.diario.turmaId) {
+        await visualizarDiario();
+        return;
+      }
+      estado.diario.turmaId = null;
+      $('#diario-detalhes').hidden = true;
+    }
+  }
+
+  async function popularSelectTurmaDiario() {
+    const selectTurma = $('#diario-turma');
+    const ano = Number($('#diario-ano-letivo').value) || null;
+    if (!ano) {
+      selectTurma.innerHTML = '<option value="">— Selecione o ano letivo —</option>';
+      return;
+    }
+    try {
+      const dados = await api('GET', `/api/turmas?porPagina=500&ano_letivo=${ano}`);
+      const turmas = (dados.itens || []).filter((t) => t.ano_letivo === ano);
+      const turmaSelecionada = estado.diario.turmaId;
+      selectTurma.innerHTML = '<option value="">— Selecione a turma —</option>' +
+        turmas.map((t) => `<option value="${t.id}">${esc(t.sigla)} — ${esc(t.ano_escolaridade)} · ${esc(t.turno)}</option>`).join('');
+      if (turmas.some((t) => t.id === turmaSelecionada)) selectTurma.value = String(turmaSelecionada);
+    } catch (e) {
+      if (e.status !== 401) notificar(e.message, 'erro');
+    }
+  }
+
+  async function visualizarDiario() {
+    const turmaId = Number($('#diario-turma').value) || null;
+    if (!turmaId) {
+      $('#diario-vazio-selecao').hidden = false;
+      $('#diario-detalhes').hidden = true;
+      return;
+    }
+    $('#diario-vazio-selecao').hidden = true;
+    $('#diario-detalhes').hidden = false;
+    estado.diario.turmaId = turmaId;
+    try {
+      const dados = await api('GET', `/api/diario?turma_id=${turmaId}`);
+      renderizarDiario(dados);
+    } catch (e) {
+      if (e.status !== 401) notificar(e.message, 'erro');
+    }
+  }
+
+  function renderizarDiario(dados) {
+    estado.diario.dados = dados;
+    const t = dados.turma;
+    $('#diario-turma-titulo').textContent =
+      `Turma ${t.sigla} — ${t.ano_escolaridade} · ${t.matriz} · turno ${t.turno} · ${t.ano_letivo}`;
+
+    const professores = dados.professores || [];
+    $('#diario-professores').innerHTML = professores.length
+      ? professores.map((p) => {
+        const detalhe = [p.cargo, p.funcao].filter(Boolean).join(' / ');
+        return `<div class="alocacao-item">
+          <span>${esc(p.professor_nome)}${detalhe ? ` — ${esc(detalhe)}` : ''}</span>
+          <span class="pill ${p.ativo ? 'verde' : 'ambar'}">${p.ativo ? 'Ativo' : 'Inativo'}</span>
+        </div>`;
+      }).join('')
+      : '<p class="secundario">Nenhum professor alocado nesta turma.</p>';
+
+    const alunos = dados.alunos || [];
+    $('#corpo-diario').innerHTML = alunos.map((a) => {
+      const transferida = a.status === 'transferido_intercampus' || a.status === 'transferido_externo';
+      const deixou = a.status === 'deixou_frequentar';
+      const info = SITUACOES_MATRICULA[a.status];
+      const situacao = info ? `<span class="pill ${info[1]}">${info[0]}</span>` : esc(a.status);
+      // Transferido tem prioridade de cor; o pos-censo entra como marcação.
+      const corLinha = transferida ? 'transferido'
+        : (deixou ? 'deixou' : (a.pos_censo ? 'pos-censo' : ''));
+      const marcaCenso = a.pos_censo
+        ? '<span class="pill amarelo">Matriculado pós-censo</span>'
+        : '';
+      const marcaRetorno = (!transferida && textoRetorno(a))
+        ? `<span class="pill roxo">${esc(textoRetorno(a))}</span>`
+        : '';
+      const detalhe = transferida
+        ? `<span class="secundario">em ${esc(formatarData(a.data_fim) || '')}` +
+          `${a.destino ? ` — destino: ${esc(a.destino)}` : ''}` +
+          `${a.motivo ? ` · motivo: ${esc(a.motivo)}` : ''}</span>`
+        : '';
+      // Transferido ganha os atalhos de correção/desfazimento na própria linha.
+      const semOutraAtiva = Number(a.outras_ativas || 0) === 0;
+      const atalhosTransferencia = transferida
+        ? `<button type="button" class="btn mini primario" data-acao="corrigir-transferencia" data-id="${a.matricula_id}">Corrigir transferência</button>` +
+          (semOutraAtiva
+            ? `<button type="button" class="btn mini" data-acao="desfazer-transferencia" data-id="${a.matricula_id}">Desfazer transferência</button>`
+            : '')
+        : '';
+      const atalhoDeixou = deixou && semOutraAtiva
+        ? `<button type="button" class="btn mini" data-acao="desfazer-deixou" data-id="${a.matricula_id}">Desfazer</button>`
+        : '';
+      return `
+      <tr class="${corLinha}">
+        <td>${esc(a.nome)}</td>
+        <td>${esc(a.cpf)}</td>
+        <td>${esc(a.matricula)}</td>
+        <td>${formatarData(a.data_inicio)}</td>
+        <td>${situacao} ${marcaCenso} ${marcaRetorno} ${detalhe}</td>
+        <td class="acao">
+          <button type="button" class="btn mini" data-acao="ficha-matricula" data-id="${a.matricula_id}" data-aluno="${a.aluno_id}" data-turma="${estado.diario.turmaId}">Gerar Ficha Matrícula</button>
+          ${atalhosTransferencia}
+          ${atalhoDeixou}
+          <button type="button" class="btn mini perigo" data-acao="remover-diario" data-id="${a.matricula_id}">Remover</button>
+        </td>
+      </tr>`;
+    }).join('');
+    $('#vazio-diario').hidden = alunos.length !== 0;
+  }
+
+  async function baixarDocumento(rota, erroPadrao, sucesso) {
+    try {
+      const resposta = await fetch(rota, {
+        headers: estado.csrf ? { 'x-csrf-token': estado.csrf } : {}
+      });
+      if (!resposta.ok) {
+        const dados = await resposta.json().catch(() => null);
+        throw new Error((dados && dados.erro) || erroPadrao);
+      }
+      const blob = await resposta.blob();
+      const nome = (resposta.headers.get('content-disposition') || '')
+        .match(/filename="([^"]+)"/)?.[1] || 'documento.docx';
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = nome;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      notificar(sucesso, 'sucesso');
+      return true;
+    } catch (e) {
+      notificar(e.message, 'erro');
+      return false;
+    }
+  }
+
+  function baixarFichaMatricula({ matriculaId, alunoId, turmaId }) {
+    return baixarDocumento(
+      `/api/diario/alunos/${alunoId}/ficha-matricula?turma_id=${turmaId}&matricula_id=${matriculaId}`,
+      'Não foi possível gerar a ficha de matrícula.',
+      'Ficha de matrícula gerada.'
+    );
+  }
+
+  async function prepararExclusaoDiario(matriculaId) {
+    try {
+      const dados = await api('DELETE', `/api/diario/${matriculaId}`);
+      if (dados && dados.excluido) {
+        notificar('Aluno removido da turma.', 'sucesso');
+        await visualizarDiario();
+        carregarMatricula();
+      }
+    } catch (e) {
+      if (e.status !== 409 || !e.requer_confirmacao) {
+        notificar(e.message, 'erro');
+        return;
+      }
+      const resumo = e.resumo || {};
+      abrirConfirmacaoExclusao(
+        {
+          rota: `/api/diario/${matriculaId}`,
+          titulo: 'Remover aluno da turma',
+          mensagem: 'Aluno removido da turma.',
+        },
+        `<b>${esc(resumo.aluno_nome || '')}</b> — turma ${esc(resumo.turma_sigla || '')} · ${esc(resumo.turma_ano_letivo || '')}`
+      );
+      $('#excluir-avisos').innerHTML = e.avisos.map((aviso) => `<li>${esc(aviso)}</li>`).join('');
+    }
+  }
+
+  $('#diario-ano-letivo').addEventListener('change', popularSelectTurmaDiario);
+  $('#diario-turma').addEventListener('change', visualizarDiario);
+
+  preencherCensoPadrao();
 
   (async function iniciar() {
     try {

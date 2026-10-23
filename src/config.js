@@ -19,6 +19,7 @@ function lerConfig() {
     sessaoHoras: Number(process.env.SESSAO_HORAS || base.sessaoHoras || 8),
     dbPath: process.env.DB_PATH || base.dbPath || './data/historicos.db',
     logoDir: process.env.LOGO_DIR || base.logoDir || './data/logo',
+    calendarioDir: process.env.CALENDARIO_DIR || base.calendarioDir || './data/calendarios',
     raizProjeto: RAIZ_PROJETO,
   };
 
@@ -29,6 +30,10 @@ function lerConfig() {
   config.logoDirAbs = path.isAbsolute(config.logoDir)
     ? path.resolve(config.logoDir)
     : path.resolve(RAIZ_PROJETO, config.logoDir);
+
+  config.calendarioDirAbs = path.isAbsolute(config.calendarioDir)
+    ? path.resolve(config.calendarioDir)
+    : path.resolve(RAIZ_PROJETO, config.calendarioDir);
 
   config.dbAbs = path.isAbsolute(config.dbPath)
     ? path.resolve(config.dbPath)

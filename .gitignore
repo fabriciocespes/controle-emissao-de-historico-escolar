@@ -3,3 +3,11 @@ data/
 pdfs/
 dist/
 *.log
+test-results/
+playwright-report/
+backups/
+temp_docx/
+planilhas/
+alunos-cadastrados.csv
+campos-alunos.csv
+marcadores-lista.txt

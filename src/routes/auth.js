@@ -1,9 +1,10 @@
 const express = require('express');
-const { conferirSenha } = require('../utils/senha');
+const { conferirSenha, gerarHash } = require('../utils/senha');
 const {
   NOME_COOKIE,
   criarSessao,
   destruirSessao,
+  hashToken,
   opcoesCookie,
   exigirCsrf,
   bloquearTentativa,
@@ -71,6 +72,47 @@ function rotasAuth({ db, config }) {
       ...dadosUsuario(requisicao.usuario),
       csrf: requisicao.sessao.csrf,
     });
+  });
+
+  roteador.post('/senha', exigirCsrf, (requisicao, resposta) => {
+    if (!requisicao.usuario) {
+      return resposta.status(401).json({ erro: 'Não autenticado.' });
+    }
+
+    const corpo = requisicao.body || {};
+    const senhaAtual = String(corpo.senha_atual || '');
+    const novaSenha = String(corpo.senha || '');
+    const confirmacao = String(corpo.senha_confirmacao || '');
+
+    if (!senhaAtual) {
+      return resposta.status(400).json({ erro: 'Informe a senha atual.', campos: { senha_atual: 'Obrigatório.' } });
+    }
+    if (novaSenha.length < 6) {
+      return resposta.status(400).json({
+        erro: 'A nova senha precisa ter ao menos 6 caracteres.',
+        campos: { senha: 'Mínimo de 6 caracteres.' },
+      });
+    }
+    if (confirmacao !== novaSenha) {
+      return resposta.status(400).json({ erro: 'As senhas não conferem.', campos: { senha_confirmacao: 'As senhas não conferem.' } });
+    }
+
+    const usuario = db
+      .prepare('SELECT id, senha_hash, senha_salt FROM usuarios WHERE id = ?')
+      .get(requisicao.usuario.id);
+
+    if (!usuario || !conferirSenha(senhaAtual, usuario.senha_hash, usuario.senha_salt)) {
+      return resposta.status(400).json({ erro: 'A senha atual está incorreta.', campos: { senha_atual: 'Senha incorreta.' } });
+    }
+
+    const { hash, salt } = gerarHash(novaSenha);
+    db.prepare('UPDATE usuarios SET senha_hash = ?, senha_salt = ? WHERE id = ?').run(hash, salt, usuario.id);
+    db.prepare('DELETE FROM sessoes WHERE usuario_id = ? AND token_hash <> ?').run(
+      usuario.id,
+      hashToken(requisicao.sessao.token)
+    );
+
+    return resposta.json({ ok: true });
   });
 
   return roteador;

@@ -139,6 +139,7 @@ module.exports = {
   montarMiddleware,
   criarSessao,
   destruirSessao,
+  hashToken,
   opcoesCookie,
   exigirLogin,
   exigirPerfil,
