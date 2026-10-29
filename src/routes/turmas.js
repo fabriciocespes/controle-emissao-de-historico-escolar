@@ -156,6 +156,52 @@ function rotasTurmas({ db }) {
     });
   }
 
+  // Próximo ano letivo só pode ser criado depois de encerrar o anterior:
+  // todas as turmas do ano anterior fechadas e com a situação final de
+  // todos os alunos registrada em situacoes_finais.
+  function exigirAnoAnteriorEncerrado(ano) {
+    const anteriores = db
+      .prepare('SELECT id, sigla, fechada FROM turmas WHERE ano_letivo = ?')
+      .all(ano - 1);
+    if (anteriores.length === 0) return;
+
+    const abertas = anteriores.filter((t) => !t.fechada);
+    if (abertas.length > 0) {
+      const siglas = abertas.map((t) => t.sigla).join(', ');
+      throw erro(
+        409,
+        `Feche o ano letivo de ${ano - 1} antes de abrir turmas em ${ano}. Turmas ainda abertas: ${siglas}.`
+      );
+    }
+
+    const semSituacao = db
+      .prepare(
+        `SELECT DISTINCT a.nome, t.sigla
+           FROM turmas t
+           JOIN matriculas m ON m.turma_id = t.id
+           JOIN alunos a ON a.id = m.aluno_id
+           LEFT JOIN situacoes_finais sf ON sf.matricula_id = m.id
+          WHERE t.ano_letivo = ?
+            AND sf.id IS NULL
+            AND (m.ativo = 1 OR m.status IN ('transferido_intercampus',
+                'transferido_externo', 'deixou_frequentar'))
+            AND NOT EXISTS (
+              SELECT 1 FROM matriculas m2
+               WHERE m2.aluno_id = m.aluno_id AND m2.turma_id = m.turma_id
+                 AND m2.ativo = 1 AND m2.id <> m.id
+            )`
+      )
+      .all(ano - 1);
+    if (semSituacao.length > 0) {
+      const nomes = semSituacao.slice(0, 5).map((l) => `${l.nome} (${l.sigla})`).join(', ');
+      const resto = semSituacao.length > 5 ? ` e mais ${semSituacao.length - 5}` : '';
+      throw erro(
+        409,
+        `Registre a situação final de todos os alunos de ${ano - 1} antes de abrir turmas em ${ano}. Faltam: ${nomes}${resto}.`
+      );
+    }
+  }
+
   roteador.get('/', (requisicao, resposta) => {
     const { where, parametros } = montarFiltro(requisicao.query);
 
@@ -189,6 +235,7 @@ function rotasTurmas({ db }) {
     const instante = agora();
 
     if (acharSiglaDuplicada(dados.ano_letivo, dados.sigla)) throw erroSiglaDuplicada();
+    exigirAnoAnteriorEncerrado(dados.ano_letivo);
 
     let resultado;
     try {
@@ -209,12 +256,15 @@ function rotasTurmas({ db }) {
 
   roteador.put('/:id(\\d+)', (requisicao, resposta) => {
     const id = Number(requisicao.params.id);
-    const existente = db.prepare('SELECT id FROM turmas WHERE id = ?').get(id);
+    const existente = db.prepare('SELECT id, ano_letivo FROM turmas WHERE id = ?').get(id);
     if (!existente) return resposta.status(404).json({ erro: 'Turma não encontrada.' });
 
     const dados = validarTurma(requisicao.body || {});
 
     if (acharSiglaDuplicada(dados.ano_letivo, dados.sigla, id)) throw erroSiglaDuplicada();
+
+    // Avançar a turma para o próximo ano letivo só depois de encerrar o anterior.
+    if (dados.ano_letivo > existente.ano_letivo) exigirAnoAnteriorEncerrado(dados.ano_letivo);
 
     try {
       db.prepare(

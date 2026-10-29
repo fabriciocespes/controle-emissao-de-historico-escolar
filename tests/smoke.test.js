@@ -1785,6 +1785,15 @@ test('sigla unica por ano letivo: duplicata recusada na criacao e na edicao', as
   const mantendoPropria = await admin.enviar('PUT', `/api/turmas/${id1}`, turmaCadastro());
   assert.equal(mantendoPropria.status, 200);
 
+  // O proximo ano letivo so nasce depois de fechar as turmas do ano anterior.
+  for (const idTurma of [id1, id2]) {
+    const fechada = await admin.enviar('POST', '/api/encerramento/fechar', {
+      turma_id: idTurma, situacoes: {},
+    });
+    assert.equal(fechada.status, 200, JSON.stringify(fechada.json));
+    assert.equal(fechada.json.fechada, true);
+  }
+
   const outroAno = await admin.enviar('POST', '/api/turmas', turmaCadastro({ ano_letivo: ano + 1 }));
   assert.equal(outroAno.status, 201, JSON.stringify(outroAno.json));
   const idOutroAno = outroAno.json.id;
@@ -2602,7 +2611,8 @@ test('declaração escolar: modelo real preenche sem deixar nenhum marcador #', 
         'PARA FINS DE: Comprovação de Escolaridade',
         'aluno(a) Aluno Declaracao Teste, natural de (Município/UF) Campos dos Goytacazes/RJ',
         '( x ) Encontra-se  matriculado(a)  no(a) 5º ano de escolaridade',
-        'deverá ser matriculado(a) no(a) 5º Ano de Escolaridade',
+        'filho(a) de Mae Declaracao Teste e Pai Declaracao Teste,',
+        'deverá ser matriculado(a) no(a) ___________',
         'Campos dos Goytacazes, ' + dataHojeBR() + '.',
       ],
     },
@@ -2667,10 +2677,70 @@ test('declaração escolar: modelo real preenche sem deixar nenhum marcador #', 
       `${cenario.descricao}: marcadores # não substituídos: ${sobrando.join(', ')}`
     );
     assert.ok(!textos.includes('#'), `${cenario.descricao}: nenhum # solto deve sobrar`);
+    const coresFora = [...xml.matchAll(/<w:color[^>]*w:val="([^"]*)"/g)]
+      .map((c) => c[1])
+      .filter((v) => v !== '000000');
+    assert.deepEqual(
+      coresFora, [],
+      `${cenario.descricao}: texto deve sair todo preto (cores encontradas: ${[...new Set(coresFora)].join(', ')})`
+    );
+    for (const nomePessoa of ['Mae Declaracao Teste', 'Pai Declaracao Teste']) {
+      const i = xml.indexOf(nomePessoa);
+      assert.ok(i >= 0, `${cenario.descricao}: esperava ver "${nomePessoa}"`);
+      const ini = Math.max(xml.lastIndexOf('<w:r ', i), xml.lastIndexOf('<w:r>', i));
+      const fim = xml.indexOf('</w:r>', i);
+      const run = xml.slice(ini, fim);
+      assert.ok(
+        !run.includes('<w:b'),
+        `${cenario.descricao}: "${nomePessoa}" não deve sair em negrito`
+      );
+    }
+    const entreNomes = xml.slice(
+      Math.min(xml.indexOf('Mae Declaracao Teste'), xml.indexOf('Pai Declaracao Teste')),
+      Math.max(xml.indexOf('Mae Declaracao Teste'), xml.indexOf('Pai Declaracao Teste'))
+    );
+    assert.ok(
+      !/<w:b(\/|Cs[\s/>]|\s)/.test(entreNomes),
+      `${cenario.descricao}: o "e" entre os nomes dos pais não deve sair em negrito`
+    );
     const visivel = textos.join('');
     for (const esperado of cenario.esperados) {
       assert.ok(visivel.includes(esperado), `${cenario.descricao}: esperava ver "${esperado}"`);
     }
+  }
+});
+
+test('declaração escolar: sem pai ou sem mãe remove o "e" e mantém a vírgula', () => {
+  const { montarMarcadoresDeclaracao, aplicarDeclaracao } = require('../src/services/declaracaoEscolar');
+  const { lerZipDocx } = require('../src/services/fichaMatricula');
+  const modelo = path.join(__dirname, '..', 'Modelo Declaracao Escolar 2026.docx');
+  const xmlOriginal = lerZipDocx(modelo).find((i) => i.nome === 'word/document.xml').dados.toString('utf8');
+  const base = {
+    nome: 'Aluno Declaracao Pais', naturalidade: 'Campos/RJ', data_nascimento: '2016-03-15',
+  };
+  const matricula = { data_fim: '2026-05-20' };
+  const turma = { ano_letivo: '2026', ano_escolaridade: '5º ano' };
+  const opcoes = { tipo: 'comprovacao', situacao: 'matriculado' };
+  const casos = [
+    {
+      aluno: { ...base, filiacao1_nome: 'Mae Sem Pai Teste', filiacao2_nome: '' },
+      esperado: 'filho(a) de Mae Sem Pai Teste,',
+    },
+    {
+      aluno: { ...base, filiacao1_nome: null, filiacao2_nome: 'Pai Sem Mae Teste' },
+      esperado: 'filho(a) de Pai Sem Mae Teste,',
+    },
+  ];
+  for (const caso of casos) {
+    const xml = aplicarDeclaracao(
+      xmlOriginal,
+      montarMarcadoresDeclaracao(caso.aluno, matricula, turma, opcoes)
+    );
+    const visivel = [...xml.matchAll(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g)].map((m) => m[1]).join('');
+    assert.ok(visivel.includes(caso.esperado), `esperava ver "${caso.esperado}"`);
+    const sobrando = [...new Set([...xml.matchAll(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g)]
+      .flatMap((m) => [...m[1].matchAll(/#[A-Za-z0-9_]+/g)].map((x) => x[0])))];
+    assert.deepEqual(sobrando, [], `marcadores # não substituídos: ${sobrando.join(', ')}`);
   }
 });
 
@@ -2732,6 +2802,19 @@ test('declaração escolar: geração e validação dos parâmetros', async () =
       /declaracao-escolar-aluno-declaracao-escolar-teste\.docx/
     );
     assert.ok(ok.texto.includes('word/document.xml'), 'o .docx gerado tem document.xml');
+
+    // Tipo condiz com o status da matrícula: aluno ativo não emite Transferência.
+    const ativoTransferencia = await admin.enviar('GET', `${rota}&tipo=transferencia&situacao=matriculado`);
+    assert.equal(ativoTransferencia.status, 400, 'aluno ativo não pode emitir transferência');
+
+    const transferida = await admin.enviar('POST', `/api/matriculas/${criada.json.id}/transferir`, {
+      tipo: 'transferido_externo', data: '2026-05-20', destino: 'Escola Teste',
+    });
+    assert.equal(transferida.status, 200, JSON.stringify(transferida.json));
+
+    // Aluno transferido não emite Comprovação de Escolaridade.
+    const transferidaComprovacao = await admin.enviar('GET', `${rota}&tipo=comprovacao&situacao=matriculado`);
+    assert.equal(transferidaComprovacao.status, 400, 'aluno transferido só pode emitir transferência');
 
     const cursouOk = await admin.enviar(
       'GET',
@@ -3318,4 +3401,453 @@ test('deixou de frequentar: desfazer é bloqueado quando há outra matrícula at
     const excluido = await admin.enviar('DELETE', `/api/alunos/${aluno.json.id}`, { confirmar: true });
     assert.equal(excluido.status, 200);
   }
+});
+
+/* ------------------------------- relatórios ------------------------------- */
+
+test('relatórios: catálogo exige login e lista fontes, campos e modelos', async () => {
+  const semLogin = new Cliente(base);
+  const negado = await semLogin.enviar('GET', '/api/relatorios/catalogo');
+  assert.equal(negado.status, 401);
+
+  const admin = new Cliente(base);
+  await admin.login('admin', 'admin123');
+  const r = await admin.enviar('GET', '/api/relatorios/catalogo');
+  assert.equal(r.status, 200);
+
+  const ids = r.json.fontes.map((f) => f.id);
+  for (const id of ['alunos', 'turmas', 'matriculas', 'devendo', 'pedidos', 'consolidacao']) {
+    assert.ok(ids.includes(id), `fonte ${id} presente no catálogo`);
+  }
+  const alunos = r.json.fontes.find((f) => f.id === 'alunos');
+  assert.ok(alunos.campos.some((c) => c.id === 'nome' && c.rotulo === 'Nome do aluno'));
+  assert.ok(alunos.campos.some((c) => c.id === 'total_alunos') === false);
+  assert.ok(alunos.filtros.some((f) => f.id === 'busca'));
+  assert.ok(alunos.agrupaveis.some((a) => a.id === 'turma'));
+  assert.ok(r.json.modelos.some((m) => m.id === 'mapa_alunos'));
+});
+
+test('relatórios: preview agrupa, formata e descreve filtros', async () => {
+  const admin = new Cliente(base);
+  await admin.login('admin', 'admin123');
+
+  const turma = await admin.enviar('POST', '/api/turmas', turmaCadastro({ sigla: 'REL-01' }));
+  assert.equal(turma.status, 201, JSON.stringify(turma.json));
+  const aluno = await admin.enviar('POST', '/api/alunos', alunoCadastro({
+    nome: 'Aluno Relatorio Especial', cpf: '157.932.480-05',
+  }));
+  assert.equal(aluno.status, 201, JSON.stringify(aluno.json));
+  const matricula = await admin.enviar('POST', '/api/matriculas', {
+    aluno_id: aluno.json.id, turma_id: turma.json.id, data_inicio: '2026-02-10',
+  });
+  assert.equal(matricula.status, 201, JSON.stringify(matricula.json));
+
+  try {
+    const prev = await admin.enviar('POST', '/api/relatorios/preview', {
+      config: {
+        fonte: 'alunos',
+        campos: ['nome', 'turma', 'status'],
+        filtros: { busca: 'Relatorio Especial' },
+        agrupar: 'turma',
+        ordenar: 'nome:asc',
+      },
+    });
+    assert.equal(prev.status, 200, JSON.stringify(prev.json));
+    assert.equal(prev.json.titulo, 'Alunos (com matrícula)');
+    assert.ok(prev.json.filtrosTexto.some((t) => /Busca por nome/.test(t)));
+    assert.ok(prev.json.colunas.some((c) => c.id === '_grupo'));
+
+    const linha = prev.json.linhas.find((l) => l.tipo === 'linha' && l.celulas[0] === 'Aluno Relatorio Especial');
+    assert.ok(linha, 'aluno aparece no preview');
+    assert.equal(linha.celulas[1], 'REL-01');
+    assert.equal(linha.celulas[2], 'Matriculado');
+    assert.ok(prev.json.linhas.some((l) => l.tipo === 'grupo'), 'linha de grupo presente');
+  } finally {
+    await admin.enviar('DELETE', `/api/turmas/${turma.json.id}`, { confirmar: true });
+    await admin.enviar('DELETE', `/api/alunos/${aluno.json.id}`, { confirmar: true });
+  }
+});
+
+test('relatórios: modelos prontos pos_censo e quadro_turmas executam (regressão)', async () => {
+  const admin = new Cliente(base);
+  await admin.login('admin', 'admin123');
+
+  // garante data base do CENSO conhecida: matrícula depois dela vira pós-censo
+  const configurado = await admin.enviar('PUT', '/api/ano-letivo', {
+    data_inicio: '2026-02-01', data_fim: '2026-12-20', data_base_censo: '2026-05-01',
+  });
+  assert.equal(configurado.status, 200, JSON.stringify(configurado.json));
+
+  const turma = await admin.enviar('POST', '/api/turmas', turmaCadastro({ sigla: 'REL-PC' }));
+  assert.equal(turma.status, 201, JSON.stringify(turma.json));
+  const aluno = await admin.enviar('POST', '/api/alunos', alunoCadastro({
+    nome: 'Aluno Pos Censo', cpf: '263.149.870-40',
+  }));
+  assert.equal(aluno.status, 201, JSON.stringify(aluno.json));
+  const matricula = await admin.enviar('POST', '/api/matriculas', {
+    aluno_id: aluno.json.id, turma_id: turma.json.id, data_inicio: '2026-05-06',
+  });
+  assert.equal(matricula.status, 201, JSON.stringify(matricula.json));
+  assert.equal(matricula.json.pos_censo, true, 'matrícula após a data base é pós-censo');
+
+  try {
+    // filtro booleano (pos_censo) não pode quebrar o bind do node:sqlite
+    const posCenso = await admin.enviar('POST', '/api/relatorios/preview', {
+      modelo: 'pos_censo',
+      config: {
+        fonte: 'matriculas',
+        campos: ['aluno_nome', 'turma', 'data_matricula', 'data_inicio', 'responsavel_nome'],
+        filtros: { pos_censo: true },
+        agrupar: null, ordenar: null,
+      },
+    });
+    assert.equal(posCenso.status, 200, JSON.stringify(posCenso.json));
+    assert.equal(posCenso.json.titulo, 'Matrículas Pós-Censo');
+    const linha = posCenso.json.linhas.find((l) => l.tipo === 'linha' && l.celulas[0] === 'Aluno Pos Censo');
+    assert.ok(linha, 'aluno com matrícula pós-censo aparece no relatório');
+
+    // fonte turmas: coluna real é busca_norm (não sigla_norm)
+    const quadro = await admin.enviar('POST', '/api/relatorios/preview', {
+      modelo: 'quadro_turmas',
+      config: {
+        fonte: 'turmas',
+        campos: ['sigla', 'matriz', 'ano_escolaridade', 'turno', 'tipo_turma', 'ano_letivo', 'total_alunos', 'professores'],
+        filtros: { busca: 'REL-PC' },
+        agrupar: null, ordenar: null,
+      },
+    });
+    assert.equal(quadro.status, 200, JSON.stringify(quadro.json));
+    assert.ok(quadro.json.linhas.some((l) => l.tipo === 'linha' && l.celulas[0] === 'REL-PC'));
+
+    const todos = await admin.enviar('POST', '/api/relatorios/preview', {
+      config: { fonte: 'turmas', campos: ['sigla', 'ano_letivo'] },
+    });
+    assert.equal(todos.status, 200, JSON.stringify(todos.json));
+  } finally {
+    await admin.enviar('DELETE', `/api/turmas/${turma.json.id}`, { confirmar: true });
+    await admin.enviar('DELETE', `/api/alunos/${aluno.json.id}`, { confirmar: true });
+  }
+});
+
+test('relatórios: PDF sai como download com cabeçalho e nome do arquivo', async () => {
+  const admin = new Cliente(base);
+  await admin.login('admin', 'admin123');
+
+  const r = await admin.enviar('POST', '/api/relatorios/pdf', {
+    config: { fonte: 'pedidos', campos: ['via', 'aluno_nome', 'status'], agrupar: 'status' },
+  });
+  assert.equal(r.status, 200, r.texto.slice(0, 200));
+  assert.match(r.headers.get('content-type'), /application\/pdf/);
+  assert.match(r.headers.get('content-disposition'), /relatorio-pedidos-de-documentos\.pdf/);
+  assert.ok(r.texto.startsWith('%PDF-'), 'corpo começa com %PDF-');
+});
+
+test('relatórios: operador também pode consultar e baixar', async () => {
+  const admin = new Cliente(base);
+  await admin.login('admin', 'admin123');
+  const criado = await admin.enviar('POST', '/api/usuarios', {
+    nome: 'Operador Relatorios', login: 'oprel', senha: 'segura123',
+    senha_confirmacao: 'segura123', perfil: 'operador',
+  });
+  assert.equal(criado.status, 201, JSON.stringify(criado.json));
+
+  const op = new Cliente(base);
+  await op.login('oprel', 'segura123');
+  const prev = await op.enviar('POST', '/api/relatorios/preview', {
+    config: { fonte: 'alunos', campos: ['nome'] },
+  });
+  assert.equal(prev.status, 200, JSON.stringify(prev.json));
+  const pdf = await op.enviar('POST', '/api/relatorios/pdf', {
+    config: { fonte: 'alunos', campos: ['nome'] },
+  });
+  assert.equal(pdf.status, 200);
+});
+
+test('relatórios: valida fonte, campos, filtros e agrupamento', async () => {
+  const admin = new Cliente(base);
+  await admin.login('admin', 'admin123');
+
+  const casos = [
+    [{ fonte: 'inexistente', campos: ['nome'] }, /Fonte de relatório inválida/],
+    [{ fonte: 'alunos', campos: [] }, /Selecione ao menos um campo/],
+    [{ fonte: 'alunos', campos: Array(21).fill('nome') }, /no máximo 20 campos/],
+    [{ fonte: 'alunos', campos: ['inexistente'] }, /Campo inválido/],
+    [{ fonte: 'alunos', campos: ['nome'], agrupar: 'inexistente' }, /Agrupamento inválido/],
+    [{ fonte: 'alunos', campos: ['nome'], filtros: { idade_min: 'abc' } }, /Filtro inválido/],
+    [{ fonte: 'matriculas', campos: ['aluno_nome'], filtros: { data_inicio_de: '10/02/2026' } }, /Data inválida/],
+  ];
+  for (const [config, esperado] of casos) {
+    const prev = await admin.enviar('POST', '/api/relatorios/preview', { config });
+    assert.equal(prev.status, 400, JSON.stringify({ config, resposta: prev.json }));
+    assert.match(prev.json.erro, esperado);
+    const pdf = await admin.enviar('POST', '/api/relatorios/pdf', { config });
+    assert.equal(pdf.status, 400, 'PDF também valida a configuração');
+  }
+
+  const modelo = await admin.enviar('POST', '/api/relatorios/preview', {
+    modelo: 'mapa_alunos',
+    config: { fonte: 'alunos', campos: ['nome', 'turma'], agrupar: 'turma' },
+  });
+  assert.equal(modelo.status, 200, JSON.stringify(modelo.json));
+  assert.equal(modelo.json.titulo, 'Mapa de Alunos');
+});
+
+/* ---------------- encerramento do ano letivo ---------------- */
+
+// CPF novo e válido (dígitos verificadores calculados) para os alunos de teste.
+function cpfNovo(base9) {
+  const digitos = String(base9).padStart(9, '0').split('').map(Number);
+  const calc = (lista) => {
+    let soma = 0;
+    for (let i = 0; i < lista.length; i += 1) soma += lista[i] * (lista.length + 1 - i);
+    const resto = (soma * 10) % 11;
+    return resto === 10 ? 0 : resto;
+  };
+  const d1 = calc(digitos);
+  const d2 = calc([...digitos, d1]);
+  const numero = `${digitos.join('')}${d1}${d2}`;
+  return `${numero.slice(0, 3)}.${numero.slice(3, 6)}.${numero.slice(6, 9)}-${numero.slice(9)}`;
+}
+
+test('encerramento do ano letivo: fechar em lote, congelar matrículas e reabrir', async () => {
+  const admin = new Cliente(base);
+  await admin.login('admin', 'admin123');
+
+  const turma = await admin.enviar('POST', '/api/turmas', turmaCadastro({ sigla: 'ENC-01' }));
+  assert.equal(turma.status, 201, JSON.stringify(turma.json));
+  const turmaId = turma.json.id;
+
+  const alunos = [];
+  const matriculas = [];
+  let terceiro = null;
+
+  try {
+    const nomes = ['Aluno Encerramento Um', 'Aluno Encerramento Dois'];
+    for (let i = 0; i < nomes.length; i += 1) {
+      const aluno = await admin.enviar('POST', '/api/alunos', alunoCadastro({
+        nome: nomes[i], cpf: cpfNovo(`90000000${i}`), filiacao1_cpf: '',
+      }));
+      assert.equal(aluno.status, 201, JSON.stringify(aluno.json));
+      alunos.push(aluno.json.id);
+
+      const matricula = await admin.enviar('POST', '/api/matriculas', {
+        aluno_id: aluno.json.id, turma_id: turmaId, data_inicio: '2026-02-10',
+      });
+      assert.equal(matricula.status, 201, JSON.stringify(matricula.json));
+      matriculas.push(matricula.json.id);
+    }
+
+    const reabrirCedo = await admin.enviar('POST', '/api/encerramento/reabrir', { turma_id: turmaId });
+    assert.equal(reabrirCedo.status, 409);
+    assert.match(reabrirCedo.json.erro, /não está fechada/);
+
+    const consulta = await admin.enviar('GET', `/api/encerramento?turma_id=${turmaId}`);
+    assert.equal(consulta.status, 200, JSON.stringify(consulta.json));
+    assert.equal(consulta.json.turma.fechada, 0);
+    assert.deepEqual(
+      consulta.json.opcoes.map((o) => o.valor),
+      ['aprovado', 'reprovado', 'reprovado_freq', 'deixou_frequentar', 'transferido']
+    );
+    assert.equal(consulta.json.alunos.length, 2);
+    assert.ok(consulta.json.alunos.every((a) => a.situacao === null));
+    assert.deepEqual(
+      consulta.json.alunos.map((a) => a.nome),
+      ['Aluno Encerramento Dois', 'Aluno Encerramento Um'],
+      'alunos em ordem alfabética'
+    );
+
+    const incompleto = await admin.enviar('POST', '/api/encerramento/fechar', {
+      turma_id: turmaId, situacoes: { [matriculas[0]]: 'aprovado' },
+    });
+    assert.equal(incompleto.status, 400);
+    assert.equal(incompleto.json.avisos.length, 1, JSON.stringify(incompleto.json));
+    assert.match(incompleto.json.avisos[0], /Aluno Encerramento Dois/);
+
+    const invalida = await admin.enviar('POST', '/api/encerramento/fechar', {
+      turma_id: turmaId,
+      situacoes: { [matriculas[0]]: 'continuidade', [matriculas[1]]: 'aprovado' },
+    });
+    assert.equal(invalida.status, 400);
+    assert.ok(
+      invalida.json.avisos.some((aviso) => /Situação inválida/.test(aviso)),
+      JSON.stringify(invalida.json)
+    );
+
+    const fechada = await admin.enviar('POST', '/api/encerramento/fechar', {
+      turma_id: turmaId,
+      situacoes: { [matriculas[0]]: 'aprovado', [matriculas[1]]: 'reprovado_freq' },
+    });
+    assert.equal(fechada.status, 200, JSON.stringify(fechada.json));
+    assert.equal(fechada.json.fechada, true);
+    assert.equal(fechada.json.total, 2);
+    assert.equal(fechada.json.turma.fechada, 1);
+    assert.ok(fechada.json.turma.fechada_em);
+    assert.deepEqual(fechada.json.alunos.map((a) => a.situacao), ['reprovado_freq', 'aprovado']);
+
+    const consultaFechada = await admin.enviar('GET', `/api/encerramento?turma_id=${turmaId}`);
+    assert.equal(consultaFechada.status, 200);
+    assert.equal(consultaFechada.json.turma.fechada, 1);
+    assert.ok(consultaFechada.json.alunos.every((a) => a.situacao));
+
+    // Turma fechada congela as matrículas.
+    const terceiroAluno = await admin.enviar('POST', '/api/alunos', alunoCadastro({
+      nome: 'Aluno Encerramento Tres', cpf: cpfNovo('900000009'), filiacao1_cpf: '',
+    }));
+    assert.equal(terceiroAluno.status, 201, JSON.stringify(terceiroAluno.json));
+    terceiro = terceiroAluno.json.id;
+
+    const novaMatricula = await admin.enviar('POST', '/api/matriculas', {
+      aluno_id: terceiro, turma_id: turmaId, data_inicio: '2026-03-01',
+    });
+    assert.equal(novaMatricula.status, 409);
+    assert.match(novaMatricula.json.erro, /fechada/);
+
+    const transferir = await admin.enviar('POST', `/api/matriculas/${matriculas[0]}/transferir`, {});
+    assert.equal(transferir.status, 409);
+    assert.match(transferir.json.erro, /fechada/);
+
+    const remover = await admin.enviar('DELETE', `/api/diario/${matriculas[1]}?confirmar=1`);
+    assert.equal(remover.status, 409);
+    assert.match(remover.json.erro, /fechada/);
+
+    const fecharFechada = await admin.enviar('POST', '/api/encerramento/fechar', {
+      turma_id: turmaId, situacoes: {},
+    });
+    assert.equal(fecharFechada.status, 409);
+    assert.match(fecharFechada.json.erro, /já está fechada/);
+
+    // Sem restrição de perfil: o operador também consulta o encerramento.
+    const criado = await admin.enviar('POST', '/api/usuarios', {
+      nome: 'Operadora Encerramento', login: 'openc', senha: 'segura123',
+      senha_confirmacao: 'segura123', perfil: 'operador',
+    });
+    assert.equal(criado.status, 201, JSON.stringify(criado.json));
+    const operadora = new Cliente(base);
+    await operadora.login('openc', 'segura123');
+    const consultaOperadora = await operadora.enviar('GET', `/api/encerramento?turma_id=${turmaId}`);
+    assert.equal(consultaOperadora.status, 200, JSON.stringify(consultaOperadora.json));
+
+    // Reabrir mantém as situações já registradas.
+    const reaberta = await admin.enviar('POST', '/api/encerramento/reabrir', { turma_id: turmaId });
+    assert.equal(reaberta.status, 200, JSON.stringify(reaberta.json));
+    assert.equal(reaberta.json.fechada, false);
+    assert.equal(reaberta.json.turma.fechada, 0);
+    assert.equal(reaberta.json.turma.fechada_em, null);
+    assert.deepEqual(reaberta.json.alunos.map((a) => a.situacao), ['reprovado_freq', 'aprovado']);
+
+    const matriculaNova = await admin.enviar('POST', '/api/matriculas', {
+      aluno_id: terceiro, turma_id: turmaId, data_inicio: '2026-03-01',
+    });
+    assert.equal(matriculaNova.status, 201, JSON.stringify(matriculaNova.json));
+    matriculas.push(matriculaNova.json.id);
+
+    const semTerceiro = await admin.enviar('POST', '/api/encerramento/fechar', {
+      turma_id: turmaId,
+      situacoes: { [matriculas[0]]: 'aprovado', [matriculas[1]]: 'reprovado_freq' },
+    });
+    assert.equal(semTerceiro.status, 400);
+    assert.ok(
+      semTerceiro.json.avisos.some((aviso) => /Aluno Encerramento Tres/.test(aviso)),
+      JSON.stringify(semTerceiro.json)
+    );
+
+    const fechadaDeNovo = await admin.enviar('POST', '/api/encerramento/fechar', {
+      turma_id: turmaId,
+      situacoes: {
+        [matriculas[0]]: 'aprovado',
+        [matriculas[1]]: 'reprovado_freq',
+        [matriculas[2]]: 'transferido',
+      },
+    });
+    assert.equal(fechadaDeNovo.status, 200, JSON.stringify(fechadaDeNovo.json));
+    assert.equal(fechadaDeNovo.json.total, 3);
+  } finally {
+    const excluida = await admin.enviar('DELETE', `/api/turmas/${turmaId}`, { confirmar: true });
+    assert.equal(excluida.status, 200, JSON.stringify(excluida.json));
+    for (const id of [...alunos, terceiro].filter(Boolean)) {
+      const excluido = await admin.enviar('DELETE', `/api/alunos/${id}`, { confirmar: true });
+      assert.equal(excluido.status, 200, JSON.stringify(excluido.json));
+    }
+  }
+});
+
+test('encerramento do ano letivo: situações da Educação Infantil e regra do próximo ano', async () => {
+  const admin = new Cliente(base);
+  await admin.login('admin', 'admin123');
+  const ano = new Date().getFullYear();
+
+  // Turma do ano anterior: enquanto estiver aberta, o próximo ano não nasce.
+  const anterior = await admin.enviar('POST', '/api/turmas', turmaCadastro({
+    ano_letivo: ano - 1,
+    sigla: 'ENC-EI',
+    matriz: 'Educação Infantil',
+    ano_escolaridade: 'Pré 2',
+    tipo_turma: null,
+  }));
+  assert.equal(anterior.status, 201, JSON.stringify(anterior.json));
+
+  const novaAberta = await admin.enviar('POST', '/api/turmas', turmaCadastro({ sigla: 'ENC-NOVO' }));
+  assert.equal(novaAberta.status, 409);
+  assert.match(novaAberta.json.erro, /Feche o ano letivo de/);
+  assert.ok(novaAberta.json.erro.includes('ENC-EI'));
+
+  let nova = null;
+  try {
+    const consulta = await admin.enviar('GET', `/api/encerramento?turma_id=${anterior.json.id}`);
+    assert.equal(consulta.status, 200, JSON.stringify(consulta.json));
+    assert.deepEqual(
+      consulta.json.opcoes.map((o) => o.valor),
+      ['continuidade', 'transferido', 'deixou_frequentar'],
+      'Educação Infantil não tem aprovado/reprovado'
+    );
+    assert.ok(!consulta.json.opcoes.some((o) => o.valor === 'aprovado'));
+
+    const fechada = await admin.enviar('POST', '/api/encerramento/fechar', {
+      turma_id: anterior.json.id, situacoes: {},
+    });
+    assert.equal(fechada.status, 200, JSON.stringify(fechada.json));
+    assert.equal(fechada.json.fechada, true);
+
+    const novaDepois = await admin.enviar('POST', '/api/turmas', turmaCadastro({ sigla: 'ENC-NOVO' }));
+    assert.equal(novaDepois.status, 201, JSON.stringify(novaDepois.json));
+    nova = novaDepois.json.id;
+  } finally {
+    if (nova) {
+      const excluida = await admin.enviar('DELETE', `/api/turmas/${nova}`, { confirmar: true });
+      assert.equal(excluida.status, 200, JSON.stringify(excluida.json));
+    }
+    const excluidaAnterior = await admin.enviar('DELETE', `/api/turmas/${anterior.json.id}`, { confirmar: true });
+    assert.equal(excluidaAnterior.status, 200, JSON.stringify(excluidaAnterior.json));
+  }
+});
+
+test('sobre: rodapé expõe nome, versão e informações técnicas só com sessão', async () => {
+  const semSessao = new Cliente(base);
+  const negado = await semSessao.enviar('GET', '/api/sobre');
+  assert.equal(negado.status, 401);
+
+  const admin = new Cliente(base);
+  await admin.login('admin', 'admin123');
+  const r = await admin.enviar('GET', '/api/sobre');
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.equal(r.json.nome, 'Sistema de Gerenciamento Escolar');
+  assert.ok(r.json.descricao.includes('Histórico Escolar'));
+  assert.equal(r.json.desenvolvido_por, 'Fabrício Cespes');
+  assert.match(r.json.desenvolvido_por_url, /^https:\/\/github\.com\//);
+  assert.match(r.json.versao, /^\d+\.\d+\.\d+/);
+  assert.match(r.json.node, /^v\d+/);
+  assert.ok(r.json.servidor.includes(':'), `servidor: ${r.json.servidor}`);
+  assert.ok(!Number.isNaN(Date.parse(r.json.atualizado_em)), `atualizado_em: ${r.json.atualizado_em}`);
+  assert.match(r.json.documentacao, /^https:\/\/github\.com\//);
+
+  // Operadora também consulta (sem restrição de perfil).
+  const criado = await admin.enviar('POST', '/api/usuarios', {
+    nome: 'Operadora Sobre', login: 'opsobre', senha: 'segura123',
+    senha_confirmacao: 'segura123', perfil: 'operador',
+  });
+  assert.equal(criado.status, 201, JSON.stringify(criado.json));
+  const operadora = new Cliente(base);
+  await operadora.login('opsobre', 'segura123');
+  const rOp = await operadora.enviar('GET', '/api/sobre');
+  assert.equal(rOp.status, 200, JSON.stringify(rOp.json));
 });

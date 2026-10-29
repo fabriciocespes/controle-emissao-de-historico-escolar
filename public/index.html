@@ -52,6 +52,8 @@
       <button type="button" class="aba ativa" data-painel="calendario" id="aba-calendario">
         Calendário do ano letivo
       </button>
+      <button type="button" class="aba" data-painel="fechar-ano">Fechar ano letivo</button>
+      <button type="button" class="aba" data-painel="reabrir-ano">Reabrir ano letivo</button>
       <p class="menu-grupo">Histórico Escolar</p>
       <button type="button" class="aba" data-painel="confeccionar">
         A confeccionar <span class="badge ambar" id="badge-confeccionar">0</span>
@@ -73,6 +75,8 @@
       <button type="button" class="aba" data-painel="matricula">Matrícula</button>
       <button type="button" class="aba" data-painel="diario">Diário</button>
       <button type="button" class="aba" data-painel="alocacoes">Professor <span class="badge azul" id="badge-alocacoes">0</span></button>
+      <p class="menu-grupo">Relatórios</p>
+      <button type="button" class="aba" data-painel="relatorios">Relatórios</button>
       <p class="menu-grupo" id="grupo-configuracoes">Configurações</p>
       <button type="button" class="aba" data-painel="usuarios" id="aba-usuarios" hidden>Usuários <span class="badge ambar" id="badge-usuarios">0</span></button>
       <button type="button" class="aba" data-painel="administracao" id="aba-administracao" hidden>Administração</button>
@@ -315,6 +319,60 @@
       </div>
     </section>
 
+    <section class="painel" id="painel-fechar-ano" hidden>
+      <div class="barra">
+        <label class="campo"><span>Ano letivo</span>
+          <select id="fechar-ano-letivo"></select>
+        </label>
+        <label class="campo"><span>Turma</span>
+          <select id="fechar-turma"></select>
+        </label>
+      </div>
+      <p class="vazio" id="fechar-vazio-selecao" hidden>
+        Selecione o ano letivo e a turma para registrar a situação final dos alunos.
+      </p>
+      <div id="fechar-detalhes" hidden>
+        <h3 class="titulo-lista-matricula" id="fechar-turma-titulo"></h3>
+        <p class="secundario" id="fechar-situacao-turma"></p>
+        <div class="tabela-rolagem">
+          <table>
+            <thead>
+              <tr>
+                <th>Aluno</th>
+                <th>Situação final</th>
+              </tr>
+            </thead>
+            <tbody id="corpo-fechar"></tbody>
+          </table>
+        </div>
+        <p class="vazio" id="vazio-fechar" hidden>Nenhum aluno matriculado nesta turma.</p>
+        <div class="barra">
+          <button type="button" class="btn primario" id="btn-fechar-turma">Fechar turma</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="painel" id="painel-reabrir-ano" hidden>
+      <div class="barra">
+        <label class="campo"><span>Ano letivo</span>
+          <select id="reabrir-ano-letivo"></select>
+        </label>
+        <label class="campo"><span>Turma</span>
+          <select id="reabrir-turma"></select>
+        </label>
+      </div>
+      <p class="vazio" id="reabrir-vazio-selecao" hidden>
+        Selecione o ano letivo e a turma fechada que deseja reabrir.
+      </p>
+      <div id="reabrir-detalhes" hidden>
+        <h3 class="titulo-lista-matricula" id="reabrir-turma-titulo"></h3>
+        <div id="reabrir-info"></div>
+        <div class="barra">
+          <button type="button" class="btn perigo" id="btn-reabrir-turma">Reabrir turma</button>
+        </div>
+      </div>
+    </section>
+
     <section class="painel" id="painel-funcionarios" hidden>
       <div class="barra">
         <input class="busca" id="busca-funcionarios" type="search"
@@ -449,7 +507,92 @@
       </form>
     </section>
 
+    <section class="painel" id="painel-relatorios" hidden>
+      <form id="form-relatorio" autocomplete="off">
+        <fieldset class="secao">
+          <legend>Relatório</legend>
+          <div class="grade">
+            <label class="campo">
+              <span>Modelo (opcional)</span>
+              <select id="relatorio-modelo">
+                <option value="">— Em branco —</option>
+              </select>
+            </label>
+            <label class="campo">
+              <span>Fonte de dados *</span>
+              <select id="relatorio-fonte" required>
+                <option value="" disabled selected>Selecione…</option>
+              </select>
+            </label>
+          </div>
+        </fieldset>
+        <fieldset class="secao">
+          <legend>Campos</legend>
+          <p class="ajuda">Selecione ao menos um campo para compor as colunas do relatório.</p>
+          <div class="grade" id="relatorio-campos"></div>
+        </fieldset>
+        <fieldset class="secao">
+          <legend>Filtros</legend>
+          <div class="grade" id="relatorio-filtros"></div>
+        </fieldset>
+        <fieldset class="secao">
+          <legend>Organização</legend>
+          <div class="grade">
+            <label class="campo">
+              <span>Agrupar por</span>
+              <select id="relatorio-agrupar">
+                <option value="">— Sem agrupamento —</option>
+              </select>
+            </label>
+            <label class="campo">
+              <span>Ordenar por</span>
+              <select id="relatorio-ordenar">
+                <option value="">— Padrão —</option>
+              </select>
+            </label>
+          </div>
+        </fieldset>
+        <div class="rodape">
+          <button type="submit" class="btn primario">Gerar prévia</button>
+          <button type="button" class="btn" id="btn-relatorio-pdf" disabled>Baixar PDF</button>
+          <span class="secundario" id="relatorio-status" style="margin:0"></span>
+        </div>
+      </form>
+      <div class="tabela-rolagem" id="relatorio-rolagem" hidden>
+        <table>
+          <thead><tr id="relatorio-thead"></tr></thead>
+          <tbody id="relatorio-tbody"></tbody>
+        </table>
+      </div>
+      <p class="vazio" id="relatorio-vazio" hidden>Selecione a fonte e ao menos um campo para gerar a prévia.</p>
+    </section>
+
   </main>
+
+    <footer class="rodape-sistema" id="rodape-sistema" aria-label="Sobre o sistema">
+      <div class="rodape-sistema-coluna">
+        <h2>Sobre o sistema</h2>
+        <strong id="sobre-nome">Sistema de Gerenciamento Escolar</strong>
+        <p id="sobre-descricao">Sistema de controle de emissão de Histórico Escolar.</p>
+        <span class="rodape-sistema-versao" id="sobre-versao">Versão —</span>
+        <p class="rodape-sistema-autor">Desenvolvido por
+          <a id="sobre-desenvolvedor" href="https://github.com/fabriciocespes"
+             target="_blank" rel="noopener noreferrer">Fabrício Cespes</a>
+        </p>
+      </div>
+      <div class="rodape-sistema-coluna">
+        <h2>Links úteis</h2>
+        <a class="rodape-sistema-link" id="sobre-documentacao" target="_blank" rel="noopener noreferrer">
+          Documentação (MANUAL.md no GitHub)
+        </a>
+      </div>
+      <div class="rodape-sistema-coluna">
+        <h2>Informações técnicas</h2>
+        <p class="rodape-sistema-linha"><span>Servidor:</span> <b id="sobre-servidor">—</b></p>
+        <p class="rodape-sistema-linha"><span>Node.js:</span> <b id="sobre-node">—</b></p>
+        <p class="rodape-sistema-linha"><span>Última atualização:</span> <b id="sobre-atualizado">—</b></p>
+      </div>
+    </footer>
   </div>
 </div>
 

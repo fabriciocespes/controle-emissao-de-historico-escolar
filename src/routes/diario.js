@@ -2,6 +2,7 @@ const express = require('express');
 const fs = require('node:fs');
 const path = require('node:path');
 const { montarMarcadores, gerarArquivoDocx } = require('../services/fichaMatricula');
+const { exigirTurmaAberta } = require('./encerramento');
 const {
   montarMarcadoresDeclaracao,
   gerarArquivoDeclaracao,
@@ -200,6 +201,17 @@ function rotasDiario({ db, config }) {
       throw erro(409, `A matrícula de ${aluno.nome} na turma ${turma.sigla} não está ativa.`);
     }
 
+    // Tipo de declaração condiz com o status da matrícula: aluno transferido
+    // só emite Transferência; os demais só Comprovação de Escolaridade.
+    const matriculaTransferida = matricula.status === 'transferido_intercampus'
+      || matricula.status === 'transferido_externo';
+    if (matriculaTransferida && tipo !== 'transferencia') {
+      throw erro(400, 'Aluno transferido: apenas a Transferência pode ser emitida.');
+    }
+    if (!matriculaTransferida && tipo !== 'comprovacao') {
+      throw erro(400, 'Aluno não transferido: apenas a Comprovação de Escolaridade pode ser emitida.');
+    }
+
     // Data da transferência: a própria matrícula ou a última transferida do aluno.
     let matriculaParaDoc = matricula;
     if (!String(matricula.data_fim || '').trim()) {
@@ -263,6 +275,8 @@ function rotasDiario({ db, config }) {
       )
       .get(matriculaId);
     if (!matricula) return resposta.status(404).json({ erro: 'Matrícula não encontrada.' });
+
+    exigirTurmaAberta(db, matricula.turma_id);
 
     const corpo = requisicao.body || {};
     const confirmar = corpo.confirmar === true || requisicao.query.confirmar === '1';

@@ -15,6 +15,9 @@ const { rotasAlocacoes } = require('./routes/alocacoes');
 const { rotasMatriculas } = require('./routes/matriculas');
 const { rotasDevendo } = require('./routes/devendo');
 const { rotasDiario } = require('./routes/diario');
+const { rotasRelatorios } = require('./routes/relatorios');
+const { rotasEncerramento } = require('./routes/encerramento');
+const { rotasSobre } = require('./routes/sobre');
 
 const METODOS_SEGUROS = ['GET', 'HEAD', 'OPTIONS'];
 
@@ -56,6 +59,9 @@ function criarApp({ db, config }) {
   app.use('/api/matriculas', rotasMatriculas({ db }));
   app.use('/api/devendo-historico', rotasDevendo({ db }));
   app.use('/api/diario', rotasDiario({ db, config }));
+  app.use('/api/relatorios', rotasRelatorios({ db, config }));
+  app.use('/api/encerramento', rotasEncerramento({ db }));
+  app.use('/api/sobre', rotasSobre({ config }));
 
   app.use('/api', (requisicao, resposta) =>
     resposta.status(404).json({ erro: 'Recurso não encontrado.' })

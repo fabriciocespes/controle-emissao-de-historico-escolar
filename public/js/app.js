@@ -37,6 +37,9 @@
     listas: { alunos: [], matricula: [], funcionarios: [], turmas: [] },
     matriculaLote: { ids: new Set(), selecionados: new Map() },
     diario: { turmaId: null, dados: null },
+    fecharAno: { ano: null, turmaId: null, dados: null },
+    reabrirAno: { ano: null, turmaId: null, dados: null },
+    relatorios: { catalogo: null, modelo: null },
   };
 
   const MAPA_CAMPOS = {
@@ -252,6 +255,7 @@
     abrirPainel('calendario');
     api('GET', '/api/pedidos/contagens').then(atualizarContadores).catch(() => {});
     carregarEscola();
+    carregarSobre();
     atualizarBadgesCadastros();
   }
 
@@ -270,7 +274,7 @@
   function abrirPainel(nome) {
     estado.painel = nome;
     $$('.aba').forEach((a) => a.classList.toggle('ativa', a.dataset.painel === nome));
-    ['calendario', 'confeccionar', 'prontos', 'entregues', 'devendo', 'alunos', 'matricula', 'diario', 'funcionarios', 'turmas', 'alocacoes', 'usuarios', 'administracao'].forEach((p) => {
+    ['calendario', 'fechar-ano', 'reabrir-ano', 'confeccionar', 'prontos', 'entregues', 'devendo', 'alunos', 'matricula', 'diario', 'funcionarios', 'turmas', 'alocacoes', 'usuarios', 'administracao', 'relatorios'].forEach((p) => {
       $(`#painel-${p}`).hidden = p !== nome;
     });
     carregarPainel();
@@ -281,11 +285,14 @@
     if (estado.painel === 'alunos') return carregarAlunos();
     if (estado.painel === 'matricula') return carregarMatricula();
     if (estado.painel === 'diario') return carregarDiario();
+    if (estado.painel === 'fechar-ano') return carregarFecharAno();
+    if (estado.painel === 'reabrir-ano') return carregarReabrirAno();
     if (estado.painel === 'funcionarios') return carregarFuncionarios();
     if (estado.painel === 'turmas') return carregarTurmas();
     if (estado.painel === 'alocacoes') return carregarAlocacoes();
     if (estado.painel === 'usuarios') return carregarUsuarios();
     if (estado.painel === 'administracao') return carregarAdministracao();
+    if (estado.painel === 'relatorios') return carregarRelatorios();
     if (estado.painel === 'devendo') return carregarDevendo();
     return carregarPedidos();
   }
@@ -595,7 +602,7 @@
         <td class="negrito">${p.ano_letivo}</td>
         <td>${esc(p.matriz)}</td>
         <td>${esc(p.ano_escolaridade)}</td>
-        <td class="negrito">${esc(p.sigla)}</td>
+        <td class="negrito">${esc(p.sigla)}${Number(p.fechada) ? ' <span class="pill ambar">Fechada</span>' : ''}</td>
         <td>${esc(p.turno)}</td>
         <td>${tipo}</td>
         <td class="acao">
@@ -865,9 +872,9 @@
       .join('');
     const desabilitado = opcoes.length > 1 ? '' : 'disabled';
     const botao = matriculas.length
-      ? '<button type="button" class="btn mini" id="btn-declaracao">Gerar Declaração</button>'
+      ? '<button type="button" class="btn mini declaracao" id="btn-declaracao">Gerar Declaração</button>'
       : '';
-    return `<select id="acoes-aluno" aria-label="Ações sobre o aluno" ${desabilitado}>${lista}</select>${botao}`;
+    return `${botao}<select id="acoes-aluno" aria-label="Ações sobre o aluno" ${desabilitado}>${lista}</select>`;
   }
 
   const TIPOS_TRANSFERENCIA = ['transferido_intercampus', 'transferido_externo'];
@@ -985,6 +992,12 @@
     ],
   };
 
+  const TIPOS_DECLARACAO_LABEL = {
+    comprovacao: 'Comprovação de Escolaridade',
+    transferencia: 'Transferência',
+  };
+  const STATUS_MATRICULA_TRANSFERIDO = ['transferido_intercampus', 'transferido_externo'];
+
   let declaracaoAtual = null;
 
   function popularAnosDeclaracao() {
@@ -1016,9 +1029,32 @@
     limparErros(form);
     form.reset();
     popularAnosDeclaracao();
+    // Tipo condiz com o status da matrícula: transferido -> só Transferência;
+    // os demais -> só Comprovação de Escolaridade.
+    const transferida = STATUS_MATRICULA_TRANSFERIDO.includes(matricula.status);
+    const tiposPermitidos = transferida ? ['transferencia'] : ['comprovacao'];
+    $('#declaracao-tipo').innerHTML = [
+      '<option value="">Selecione o tipo...</option>',
+      ...tiposPermitidos.map((valor) =>
+        `<option value="${valor}">${TIPOS_DECLARACAO_LABEL[valor]}</option>`),
+    ].join('');
     $('#declaracao-situacao-opcoes').innerHTML = '';
     $('#declaracao-situacao-campo').hidden = true;
     $('#declaracao-final-campo').hidden = true;
+    if (transferida) {
+      // Transferido: tipo Transferência já vem selecionado e a situação fica
+      // travada em "Cursou" (Matriculado/Frequentando desabilitados).
+      $('#declaracao-tipo').value = 'transferencia';
+      $('#declaracao-tipo').dispatchEvent(new Event('change'));
+      for (const radio of document.querySelectorAll('input[name="declaracao_situacao"]')) {
+        if (radio.value === 'cursou') {
+          radio.checked = true;
+          radio.dispatchEvent(new Event('change', { bubbles: true }));
+        } else {
+          radio.disabled = true;
+        }
+      }
+    }
     abrirModal('#modal-declaracao');
     $('#declaracao-tipo').focus();
   }
@@ -2722,6 +2758,25 @@
     }
   }
 
+  // Rodapé "Sobre o sistema" (todas as telas): nome, versão, link da
+  // documentação e informações técnicas expostas por GET /api/sobre.
+  async function carregarSobre() {
+    try {
+      const dados = await api('GET', '/api/sobre');
+      if (dados.nome) $('#sobre-nome').textContent = dados.nome;
+      if (dados.descricao) $('#sobre-descricao').textContent = dados.descricao;
+      if (dados.versao) $('#sobre-versao').textContent = `Versão ${dados.versao}`;
+      if (dados.desenvolvido_por) $('#sobre-desenvolvedor').textContent = dados.desenvolvido_por;
+      if (dados.desenvolvido_por_url) $('#sobre-desenvolvedor').href = dados.desenvolvido_por_url;
+      if (dados.documentacao) $('#sobre-documentacao').href = dados.documentacao;
+      if (dados.servidor) $('#sobre-servidor').textContent = dados.servidor;
+      if (dados.node) $('#sobre-node').textContent = dados.node;
+      if (dados.atualizado_em) $('#sobre-atualizado').textContent = formatarDataHora(dados.atualizado_em);
+    } catch {
+      // Rodapé nunca derruba a tela: ficam os valores padrão do HTML.
+    }
+  }
+
   $('#btn-editar-escola').addEventListener('click', () => {
     const dados = estado.escola || {};
     const form = $('#form-escola');
@@ -3324,6 +3379,234 @@
     $('#vazio-diario').hidden = alunos.length !== 0;
   }
 
+  /* ---------------- encerramento do ano letivo ---------------- */
+
+  // fechada_em chega como ISO completo (AAAA-MM-DDTHH:MM:SS...).
+  function formatarDataHora(iso) {
+    if (!iso) return '—';
+    const [data, hora] = String(iso).split('T');
+    const [ano, mes, dia] = data.split('-');
+    const h = String(hora || '').slice(0, 5);
+    return h ? `${dia}/${mes}/${ano} às ${h}` : `${dia}/${mes}/${ano}`;
+  }
+
+  async function popularAnosLetivosEncerramento(selectAno) {
+    if (selectAno.dataset.populado) return;
+    try {
+      const dados = await api('GET', '/api/turmas?porPagina=500');
+      const anos = [...new Set((dados.itens || []).map((t) => t.ano_letivo))].sort((a, b) => b - a);
+      const anoAtual = new Date().getFullYear();
+      selectAno.innerHTML = '<option value="">— Selecione o ano letivo —</option>' +
+        anos.map((a) => `<option value="${a}"${a === anoAtual ? ' selected' : ''}>${a}</option>`).join('');
+      selectAno.dataset.populado = '1';
+    } catch (e) {
+      if (e.status !== 401) notificar(e.message, 'erro');
+      throw e;
+    }
+  }
+
+  async function popularTurmasEncerramento(painel, turmaId) {
+    const select = $(`#${painel}-turma`);
+    const ano = Number($(`#${painel}-ano-letivo`).value) || null;
+    if (!ano) {
+      select.innerHTML = '<option value="">— Selecione o ano letivo —</option>';
+      return;
+    }
+    try {
+      const dados = await api('GET', `/api/turmas?porPagina=500&ano_letivo=${ano}`);
+      const turmas = (dados.itens || []).filter((t) => t.ano_letivo === ano);
+      select.innerHTML = '<option value="">— Selecione a turma —</option>' +
+        turmas.map((t) => `<option value="${t.id}">${esc(t.sigla)} — ${esc(t.ano_escolaridade)} · ${esc(t.turno)}${Number(t.fechada) ? ' · fechada' : ''}</option>`).join('');
+      if (turmaId && turmas.some((t) => t.id === turmaId)) select.value = String(turmaId);
+    } catch (e) {
+      if (e.status !== 401) notificar(e.message, 'erro');
+    }
+  }
+
+  async function carregarFecharAno() {
+    const selectAno = $('#fechar-ano-letivo');
+    try {
+      await popularAnosLetivosEncerramento(selectAno);
+    } catch { return; }
+    if (estado.fecharAno.ano) selectAno.value = String(estado.fecharAno.ano);
+    await popularTurmasEncerramento('fechar', estado.fecharAno.turmaId);
+    if (estado.fecharAno.turmaId && Number($('#fechar-turma').value) === estado.fecharAno.turmaId) {
+      await carregarTurmaFechar();
+      return;
+    }
+    estado.fecharAno.turmaId = null;
+    $('#fechar-vazio-selecao').hidden = false;
+    $('#fechar-detalhes').hidden = true;
+  }
+
+  async function carregarTurmaFechar() {
+    const turmaId = Number($('#fechar-turma').value) || null;
+    if (!turmaId) {
+      estado.fecharAno.turmaId = null;
+      $('#fechar-vazio-selecao').hidden = false;
+      $('#fechar-detalhes').hidden = true;
+      return;
+    }
+    $('#fechar-vazio-selecao').hidden = true;
+    $('#fechar-detalhes').hidden = false;
+    estado.fecharAno.turmaId = turmaId;
+    estado.fecharAno.ano = Number($('#fechar-ano-letivo').value) || null;
+    try {
+      const dados = await api('GET', `/api/encerramento?turma_id=${turmaId}`);
+      renderizarFecharAno(dados);
+    } catch (e) {
+      if (e.status !== 401) notificar(e.message, 'erro');
+    }
+  }
+
+  function renderizarFecharAno(dados) {
+    estado.fecharAno.dados = dados;
+    const t = dados.turma;
+    estado.fecharAno.ano = t.ano_letivo;
+    $('#fechar-turma-titulo').textContent =
+      `Turma ${t.sigla} — ${t.ano_escolaridade} · ${t.matriz} · turno ${t.turno} · ${t.ano_letivo}`;
+
+    const fechada = Boolean(Number(t.fechada));
+    $('#fechar-situacao-turma').innerHTML = fechada
+      ? `<span class="pill ambar">Fechada</span> Fechada em ${esc(formatarDataHora(t.fechada_em))}. ` +
+        'Para alterar as situações finais, use a tela <b>Reabrir ano letivo</b>.'
+      : '<span class="pill verde">Aberta</span> Selecione a situação final de todos os alunos e feche a turma.';
+
+    const opcoes = dados.opcoes || [];
+    const alunos = dados.alunos || [];
+    $('#corpo-fechar').innerHTML = alunos.map((a) => `
+      <tr>
+        <td>${esc(a.nome)}</td>
+        <td>
+          <select class="situacao-final" data-matricula="${a.matricula_id}"
+                  aria-label="Situação final de ${esc(a.nome)}" ${fechada ? 'disabled' : ''}>
+            <option value="">— Selecione —</option>
+            ${opcoes.map((o) => `<option value="${o.valor}"${a.situacao === o.valor ? ' selected' : ''}>${esc(o.rotulo)}</option>`).join('')}
+          </select>
+        </td>
+      </tr>`).join('');
+    $('#vazio-fechar').hidden = alunos.length !== 0;
+    $('#btn-fechar-turma').hidden = fechada;
+  }
+
+  async function salvarFecharAno() {
+    const turmaId = estado.fecharAno.turmaId;
+    if (!turmaId) return;
+    const situacoes = {};
+    $$('#corpo-fechar .situacao-final').forEach((sel) => {
+      situacoes[sel.dataset.matricula] = sel.value;
+    });
+
+    const botao = $('#btn-fechar-turma');
+    botao.disabled = true;
+    try {
+      const dados = await api('POST', '/api/encerramento/fechar', { turma_id: turmaId, situacoes });
+      notificar(`Turma ${dados.turma.sigla} fechada com ${dados.total} situação(ões) final(is) registrada(s).`, 'sucesso');
+      renderizarFecharAno(dados);
+    } catch (e) {
+      if (e.status === 400 && e.avisos && e.avisos.length) {
+        $('#fechar-situacao-turma').innerHTML =
+          `<b>${esc(e.message)}</b><br>` + e.avisos.map((aviso) => `• ${esc(aviso)}`).join('<br>');
+      }
+      if (e.status !== 401) notificar(e.message, 'erro');
+    } finally {
+      botao.disabled = false;
+    }
+  }
+
+  async function carregarReabrirAno() {
+    const selectAno = $('#reabrir-ano-letivo');
+    try {
+      await popularAnosLetivosEncerramento(selectAno);
+    } catch { return; }
+    if (estado.reabrirAno.ano) selectAno.value = String(estado.reabrirAno.ano);
+    await popularTurmasEncerramento('reabrir', estado.reabrirAno.turmaId);
+    if (estado.reabrirAno.turmaId && Number($('#reabrir-turma').value) === estado.reabrirAno.turmaId) {
+      await carregarTurmaReabrir();
+      return;
+    }
+    estado.reabrirAno.turmaId = null;
+    $('#reabrir-vazio-selecao').hidden = false;
+    $('#reabrir-detalhes').hidden = true;
+  }
+
+  async function carregarTurmaReabrir() {
+    const turmaId = Number($('#reabrir-turma').value) || null;
+    if (!turmaId) {
+      estado.reabrirAno.turmaId = null;
+      $('#reabrir-vazio-selecao').hidden = false;
+      $('#reabrir-detalhes').hidden = true;
+      return;
+    }
+    $('#reabrir-vazio-selecao').hidden = true;
+    $('#reabrir-detalhes').hidden = false;
+    estado.reabrirAno.turmaId = turmaId;
+    estado.reabrirAno.ano = Number($('#reabrir-ano-letivo').value) || null;
+    try {
+      const dados = await api('GET', `/api/encerramento?turma_id=${turmaId}`);
+      renderizarReabrirAno(dados);
+    } catch (e) {
+      if (e.status !== 401) notificar(e.message, 'erro');
+    }
+  }
+
+  function renderizarReabrirAno(dados) {
+    estado.reabrirAno.dados = dados;
+    const t = dados.turma;
+    estado.reabrirAno.ano = t.ano_letivo;
+    $('#reabrir-turma-titulo').textContent =
+      `Turma ${t.sigla} — ${t.ano_escolaridade} · ${t.matriz} · turno ${t.turno} · ${t.ano_letivo}`;
+
+    const fechada = Boolean(Number(t.fechada));
+    const alunos = dados.alunos || [];
+    const comSituacao = alunos.filter((a) => a.situacao).length;
+    const rotulos = new Map((dados.opcoes || []).map((o) => [o.valor, o.rotulo]));
+
+    const linhas = alunos.length
+      ? `<div class="tabela-rolagem"><table>
+          <thead><tr><th>Aluno</th><th>Situação final</th></tr></thead>
+          <tbody>${alunos.map((a) => `<tr><td>${esc(a.nome)}</td><td>${
+            a.situacao
+              ? esc(rotulos.get(a.situacao) || a.situacao)
+              : '<span class="secundario">não registrada</span>'
+          }</td></tr>`).join('')}</tbody>
+        </table></div>`
+      : '<p class="vazio">Nenhum aluno matriculado nesta turma.</p>';
+
+    $('#reabrir-info').innerHTML = `
+      <p class="secundario">${fechada
+        ? `<span class="pill ambar">Fechada</span> Fechada em ${esc(formatarDataHora(t.fechada_em))}.`
+        : '<span class="pill verde">Aberta</span> Esta turma não está fechada.'}</p>
+      <p class="secundario">${alunos.length} aluno(s) · ${comSituacao} com situação final registrada.</p>
+      ${linhas}
+      ${fechada
+        ? '<p class="secundario">Ao confirmar, a turma é reaberta com as situações abaixo preservadas. Após alterá-las, a turma é fechada novamente.</p>'
+        : '<p class="secundario">As situações foram mantidas. Use a tela <b>Fechar ano letivo</b> para alterá-las e fechar a turma novamente.</p>'}`;
+
+    $('#btn-reabrir-turma').hidden = !fechada;
+  }
+
+  function prepararReabertura() {
+    const dados = estado.reabrirAno.dados;
+    if (!dados || !Number(dados.turma.fechada)) return;
+    const t = dados.turma;
+    const alunos = dados.alunos || [];
+    abrirConfirmacaoExclusao(
+      {
+        rota: '/api/encerramento/reabrir',
+        metodo: 'POST',
+        corpo: { turma_id: t.id },
+        titulo: 'Reabrir ano letivo',
+        mensagem: `Turma ${t.sigla} reaberta. As situações finais já registradas foram mantidas.`,
+        rotulo: 'Sim, reabrir a turma',
+        cabecalho: 'A turma abaixo será reaberta para alteração das situações finais:',
+        avisosHtml: ['<li>Ao alterar as situações, a turma será fechada novamente.</li>'],
+      },
+      `<b>${esc(t.sigla)}</b> — ${esc(t.ano_escolaridade)} · ${esc(t.matriz)} · ${t.ano_letivo}` +
+        `<br>${alunos.length} aluno(s) · ${alunos.filter((a) => a.situacao).length} com situação final registrada`
+    );
+  }
+
   async function baixarDocumento(rota, erroPadrao, sucesso) {
     try {
       const resposta = await fetch(rota, {
@@ -3386,8 +3669,299 @@
     }
   }
 
+  /* ---------------- relatórios ---------------- */
+
+  function fonteRelatorioSelecionada() {
+    const cat = estado.relatorios.catalogo;
+    if (!cat) return null;
+    const id = $('#relatorio-fonte').value;
+    return cat.fontes.find((f) => f.id === id) || null;
+  }
+
+  function limparPreviaRelatorio(mensagem) {
+    $('#relatorio-thead').innerHTML = '';
+    $('#relatorio-tbody').innerHTML = '';
+    $('#relatorio-rolagem').hidden = true;
+    $('#relatorio-status').textContent = '';
+    $('#btn-relatorio-pdf').disabled = true;
+    const vazio = $('#relatorio-vazio');
+    vazio.textContent = mensagem || 'Selecione a fonte e ao menos um campo para gerar a prévia.';
+    vazio.hidden = false;
+  }
+
+  async function carregarRelatorios() {
+    try {
+      if (!estado.relatorios.catalogo) {
+        estado.relatorios.catalogo = await api('GET', '/api/relatorios/catalogo');
+      }
+      const cat = estado.relatorios.catalogo;
+
+      $('#relatorio-fonte').innerHTML = '<option value="" disabled selected>Selecione…</option>'
+        + cat.fontes.map((f) => `<option value="${esc(f.id)}">${esc(f.rotulo)}</option>`).join('');
+      $('#relatorio-modelo').innerHTML = '<option value="">— Em branco —</option>'
+        + cat.modelos.map((m) => `<option value="${esc(m.id)}">${esc(m.rotulo)}</option>`).join('');
+
+      $('#relatorio-campos').innerHTML = '';
+      $('#relatorio-filtros').innerHTML = '';
+      $('#relatorio-agrupar').innerHTML = '<option value="">— Sem agrupamento —</option>';
+      $('#relatorio-ordenar').innerHTML = '<option value="">— Padrão —</option>';
+      limparPreviaRelatorio();
+    } catch (e) {
+      notificar(e.message, 'erro');
+    }
+  }
+
+  function renderizarCamposRelatorio() {
+    const fonte = fonteRelatorioSelecionada();
+    const contCampos = $('#relatorio-campos');
+    const contFiltros = $('#relatorio-filtros');
+    const selAgrupar = $('#relatorio-agrupar');
+
+    if (!fonte) {
+      contCampos.innerHTML = '';
+      contFiltros.innerHTML = '';
+      selAgrupar.innerHTML = '<option value="">— Sem agrupamento —</option>';
+      atualizarOrdenarRelatorio('');
+      return;
+    }
+
+    contCampos.innerHTML = `<div class="check-grid">${fonte.campos.map((c) => (
+      `<label class="campo check"><input type="checkbox" name="campo" value="${esc(c.id)}">`
+      + `<span>${esc(c.rotulo)}${c.soma ? ' (Σ)' : ''}</span></label>`
+    )).join('')}</div>`;
+
+    contFiltros.innerHTML = fonte.filtros.map((f) => {
+      const idCampo = `relatorio-filtro-${f.id}`;
+      let controle;
+      if (f.tipo === 'booleano') {
+        controle = `<select id="${idCampo}" data-filtro="${esc(f.id)}" data-tipo="booleano">`
+          + '<option value="">—</option><option value="true">Sim</option><option value="false">Não</option></select>';
+      } else if (f.tipo === 'data') {
+        controle = `<input type="date" id="${idCampo}" data-filtro="${esc(f.id)}" data-tipo="data">`;
+      } else if (f.tipo === 'inteiro') {
+        controle = `<input type="number" step="1" id="${idCampo}" data-filtro="${esc(f.id)}" data-tipo="inteiro">`;
+      } else {
+        controle = `<input type="text" id="${idCampo}" data-filtro="${esc(f.id)}" data-tipo="texto">`;
+      }
+      return `<label class="campo"><span>${esc(f.rotulo)}</span>${controle}</label>`;
+    }).join('');
+
+    selAgrupar.innerHTML = '<option value="">— Sem agrupamento —</option>'
+      + fonte.agrupaveis.map((a) => `<option value="${esc(a.id)}">${esc(a.rotulo)}</option>`).join('');
+
+    atualizarOrdenarRelatorio('');
+  }
+
+  function atualizarOrdenarRelatorio(valorPreservado) {
+    const fonte = fonteRelatorioSelecionada();
+    const sel = $('#relatorio-ordenar');
+    const atual = valorPreservado !== undefined ? valorPreservado : sel.value;
+    const opcoes = ['<option value="">— Padrão —</option>'];
+
+    if ($('#relatorio-agrupar').value) {
+      opcoes.push('<option value="_grupo:asc">Agrupamento (A→Z)</option>');
+      opcoes.push('<option value="_grupo:desc">Agrupamento (Z→A)</option>');
+    }
+    if (fonte) {
+      for (const caixa of $$('#relatorio-campos input[name="campo"]:checked')) {
+        const campo = fonte.campos.find((c) => c.id === caixa.value);
+        if (!campo) continue;
+        opcoes.push(`<option value="${esc(campo.id)}:asc">${esc(campo.rotulo)} (A→Z)</option>`);
+        opcoes.push(`<option value="${esc(campo.id)}:desc">${esc(campo.rotulo)} (Z→A)</option>`);
+      }
+    }
+    sel.innerHTML = opcoes.join('');
+    if (atual && Array.from(sel.options).some((o) => o.value === atual)) sel.value = atual;
+  }
+
+  function aplicarModeloRelatorio() {
+    const cat = estado.relatorios.catalogo;
+    if (!cat) return;
+    const modeloId = $('#relatorio-modelo').value;
+    estado.relatorios.modelo = modeloId || null;
+    if (!modeloId) return;
+    const modelo = cat.modelos.find((m) => m.id === modeloId);
+    if (!modelo) return;
+    const cfg = modelo.config || {};
+
+    $('#relatorio-fonte').value = cfg.fonte || '';
+    renderizarCamposRelatorio();
+
+    const marcados = new Set(cfg.campos || []);
+    for (const caixa of $$('#relatorio-campos input[name="campo"]')) {
+      caixa.checked = marcados.has(caixa.value);
+    }
+    for (const controle of $$('#relatorio-filtros [data-filtro]')) {
+      const valor = (cfg.filtros || {})[controle.dataset.filtro];
+      controle.value = valor === undefined || valor === null ? '' : String(valor);
+    }
+    $('#relatorio-agrupar').value = cfg.agrupar || '';
+    atualizarOrdenarRelatorio(cfg.ordenar || '');
+  }
+
+  function montarConfigRelatorio() {
+    const filtros = {};
+    for (const controle of $$('#relatorio-filtros [data-filtro]')) {
+      const v = controle.value;
+      if (v === '' || v === null || v === undefined) continue;
+      filtros[controle.dataset.filtro] = v;
+    }
+    return {
+      config: {
+        fonte: $('#relatorio-fonte').value,
+        campos: $$('#relatorio-campos input[name="campo"]:checked').map((c) => c.value),
+        filtros,
+        agrupar: $('#relatorio-agrupar').value || null,
+        ordenar: $('#relatorio-ordenar').value || null,
+      },
+      modelo: $('#relatorio-modelo').value || null,
+    };
+  }
+
+  function renderizarPreviaRelatorio(resultado) {
+    const thead = $('#relatorio-thead');
+    const tbody = $('#relatorio-tbody');
+    const rolagem = $('#relatorio-rolagem');
+    const vazio = $('#relatorio-vazio');
+
+    thead.innerHTML = resultado.colunas.map((c) => `<th>${esc(c.rotulo)}</th>`).join('');
+
+    if (resultado.linhas.length === 0) {
+      tbody.innerHTML = '';
+      rolagem.hidden = true;
+      vazio.textContent = 'Nenhuma linha encontrada com os filtros informados.';
+      vazio.hidden = false;
+      return;
+    }
+
+    const temGrupo = resultado.colunas.length > 0 && resultado.colunas[0].id === '_grupo';
+    tbody.innerHTML = resultado.linhas.map((l) => {
+      if (l.tipo === 'grupo') {
+        return `<tr class="relatorio-grupo"><td colspan="${resultado.colunas.length}"><b>${esc(l.valor)}</b></td></tr>`;
+      }
+      const prefixo = temGrupo ? '<td></td>' : '';
+      return `<tr>${prefixo}${l.celulas.map((cel) => `<td>${esc(cel)}</td>`).join('')}</tr>`;
+    }).join('');
+
+    const totais = resultado.totais || {};
+    if (Object.keys(totais).length > 0) {
+      const celulas = [];
+      if (temGrupo) celulas.push('<td><b>Totais</b></td>');
+      for (const col of resultado.colunas) {
+        if (col.id === '_grupo') continue;
+        const valor = totais[col.id];
+        celulas.push(`<td>${valor === undefined ? '' : `<b>${esc(valor)}</b>`}</td>`);
+      }
+      tbody.insertAdjacentHTML('beforeend', `<tr class="relatorio-totais">${celulas.join('')}</tr>`);
+    }
+
+    rolagem.hidden = false;
+    vazio.hidden = true;
+  }
+
+  async function gerarPreviaRelatorio() {
+    const { config, modelo } = montarConfigRelatorio();
+    if (!config.fonte) { notificar('Selecione a fonte de dados.', 'erro'); return; }
+    if (config.campos.length === 0) { notificar('Selecione ao menos um campo.', 'erro'); return; }
+
+    const status = $('#relatorio-status');
+    try {
+      status.textContent = 'Gerando prévia…';
+      const resultado = await api('POST', '/api/relatorios/preview', { config, modelo });
+      renderizarPreviaRelatorio(resultado);
+      $('#btn-relatorio-pdf').disabled = resultado.total_linhas === 0;
+      estado.relatorios.config = config;
+      let msg = `${resultado.total_linhas} linha(s)`;
+      if (resultado.truncado) msg += ' (prévia truncada em 100)';
+      status.textContent = msg;
+    } catch (e) {
+      limparPreviaRelatorio();
+      notificar(e.message, 'erro');
+    }
+  }
+
+  async function baixarRelatorioPdf() {
+    const { config, modelo } = montarConfigRelatorio();
+    if (!config.fonte || config.campos.length === 0) {
+      notificar('Gere a prévia antes de baixar o PDF.', 'erro');
+      return;
+    }
+    const botao = $('#btn-relatorio-pdf');
+    try {
+      botao.disabled = true;
+      botao.textContent = 'Gerando…';
+      const resposta = await fetch('/api/relatorios/pdf', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          ...(estado.csrf ? { 'x-csrf-token': estado.csrf } : {}),
+        },
+        body: JSON.stringify({ config, modelo }),
+      });
+      if (!resposta.ok) {
+        const dados = await resposta.json().catch(() => null);
+        throw new Error((dados && dados.erro) || 'Não foi possível gerar o PDF.');
+      }
+      const blob = await resposta.blob();
+      const nome = (resposta.headers.get('content-disposition') || '')
+        .match(/filename="([^"]+)"/)?.[1] || 'relatorio.pdf';
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = nome;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      notificar('PDF gerado.', 'sucesso');
+    } catch (e) {
+      notificar(e.message, 'erro');
+    } finally {
+      botao.disabled = false;
+      botao.textContent = 'Baixar PDF';
+    }
+  }
+
+  $('#relatorio-fonte').addEventListener('change', () => {
+    $('#relatorio-modelo').value = '';
+    estado.relatorios.modelo = null;
+    renderizarCamposRelatorio();
+    limparPreviaRelatorio();
+  });
+  $('#relatorio-modelo').addEventListener('change', () => {
+    aplicarModeloRelatorio();
+    limparPreviaRelatorio();
+  });
+  $('#relatorio-campos').addEventListener('change', atualizarOrdenarRelatorio);
+  $('#relatorio-agrupar').addEventListener('change', () => atualizarOrdenarRelatorio());
+  $('#form-relatorio').addEventListener('submit', (evento) => {
+    evento.preventDefault();
+    gerarPreviaRelatorio();
+  });
+  $('#btn-relatorio-pdf').addEventListener('click', baixarRelatorioPdf);
+
   $('#diario-ano-letivo').addEventListener('change', popularSelectTurmaDiario);
   $('#diario-turma').addEventListener('change', visualizarDiario);
+
+  $('#fechar-ano-letivo').addEventListener('change', async () => {
+    estado.fecharAno.ano = Number($('#fechar-ano-letivo').value) || null;
+    estado.fecharAno.turmaId = null;
+    $('#fechar-detalhes').hidden = true;
+    $('#fechar-vazio-selecao').hidden = false;
+    await popularTurmasEncerramento('fechar', null);
+  });
+  $('#fechar-turma').addEventListener('change', carregarTurmaFechar);
+  $('#btn-fechar-turma').addEventListener('click', salvarFecharAno);
+
+  $('#reabrir-ano-letivo').addEventListener('change', async () => {
+    estado.reabrirAno.ano = Number($('#reabrir-ano-letivo').value) || null;
+    estado.reabrirAno.turmaId = null;
+    $('#reabrir-detalhes').hidden = true;
+    $('#reabrir-vazio-selecao').hidden = false;
+    await popularTurmasEncerramento('reabrir', null);
+  });
+  $('#reabrir-turma').addEventListener('change', carregarTurmaReabrir);
+  $('#btn-reabrir-turma').addEventListener('click', prepararReabertura);
 
   preencherCensoPadrao();
 

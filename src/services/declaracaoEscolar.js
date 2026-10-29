@@ -31,6 +31,9 @@ const SIGLA_EI = {
 const SUBLINHADO_ANO = '_______';
 const SUBLINHADO_ESCOLARIDADE = '___';
 const DATA_VAZIA = '___/___/___';
+// Comprovação de Escolaridade não indica ano de matrícula: linha em branco
+// (pedido do usuário, exemplo: "deverá ser matriculado(a) no(a) ___________").
+const ANO_MATRICULAR_EM_BRANCO = '___________';
 
 // Marcadores cujo valor é a caixa inteira (o modelo não traz parênteses).
 const CAIXAS_SOLAS = ['MATRICULADO', 'MATRICULADOFREQUENTANDO'];
@@ -262,9 +265,103 @@ function montarMarcadoresDeclaracao(aluno, matricula, turma, opcoes = {}) {
     return `${numeral + 1}º Ano de Escolaridade`;
   })();
   const avanca = ehCursou && ['aprovado', 'em_continuidade', 'reclassificado'].includes(final);
-  m.ANOESCOLARIDADEAMATRICULAR = avanca ? proximo : atual;
+  m.ANOESCOLARIDADEAMATRICULAR = tipo === 'comprovacao'
+    ? ANO_MATRICULAR_EM_BRANCO
+    : (avanca ? proximo : atual);
 
   return m;
+}
+
+function tiraNegrito(str) {
+  return str
+    .replace(/<w:bCs\b[^>]*\/>/g, '')
+    .replace(/<w:b\b[^>]*\/>/g, '');
+}
+
+// Remove negrito (w:b/w:bCs) do run que carrega o marcador, para que os nomes
+// de pai e mãe fiquem em texto simples (pedido do usuário). Cobre todas as
+// ocorrências: coleta os runs e ajusta de trás para frente (o texto não muda).
+function semNegritoNoMarcador(xmlOriginal, alvo) {
+  const RE_WT = /<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g;
+  const trechos = [];
+  let r;
+  while ((r = RE_WT.exec(xmlOriginal))) {
+    if (r[1].trim() !== alvo.trim()) continue;
+    const ini = Math.max(
+      xmlOriginal.lastIndexOf('<w:r ', r.index),
+      xmlOriginal.lastIndexOf('<w:r>', r.index)
+    );
+    const fim = xmlOriginal.indexOf('</w:r>', r.index);
+    if (ini < 0 || fim < 0) continue;
+    trechos.push([ini, fim + 6]);
+  }
+  let out = xmlOriginal;
+  for (let k = trechos.length - 1; k >= 0; k -= 1) {
+    const [ini, fim] = trechos[k];
+    out = out.slice(0, ini) + tiraNegrito(out.slice(ini, fim)) + out.slice(fim);
+  }
+  return out;
+}
+
+// Trecho entre o fim do run portador de alvoA e o início do run portador de
+// alvoB (espaço + "e" que separam os nomes dos pais no modelo).
+function acharTrechoEntre(xml, alvoA, alvoB) {
+  const iA = acharMarcador(xml, alvoA);
+  const iB = acharMarcador(xml, alvoB);
+  if (iA < 0 || iB < 0 || iB <= iA) return null;
+  const fimA = xml.indexOf('</w:r>', xml.indexOf('</w:t>', iA));
+  const iniB = Math.max(xml.lastIndexOf('<w:r ', iB), xml.lastIndexOf('<w:r>', iB));
+  if (fimA < 0 || iniB < 0 || iniB <= fimA) return null;
+  return [fimA + 6, iniB];
+}
+
+// Apaga o run inteiro que carrega o marcador.
+function removerRunDoMarcador(xml, alvo) {
+  const i = acharMarcador(xml, alvo);
+  if (i < 0) return xml;
+  const ini = Math.max(xml.lastIndexOf('<w:r ', i), xml.lastIndexOf('<w:r>', i));
+  const fim = xml.indexOf('</w:r>', i);
+  if (ini < 0 || fim < 0) return xml;
+  return xml.slice(0, ini) + xml.slice(fim + 6);
+}
+
+// Deixa o texto do marcador sem espaços de borda (evita "de  Pai" quando a
+// mãe é removida e o portador do pai herdou o espaço do "e ").
+function limparEspacosDoMarcador(xml, alvo) {
+  const i = acharMarcador(xml, alvo);
+  if (i < 0) return xml;
+  const fim = xml.indexOf('</w:t>', i);
+  if (fim < 0) return xml;
+  return xml.slice(0, i) + `<w:t>${alvo}</w:t>` + xml.slice(fim + 6);
+}
+
+// Quando falta o nome do pai ou da mãe no registro, remove o "e" (e o espaço)
+// que separa os nomes — a vírgula do modelo já fica no lugar. Com os dois
+// presentes, apenas tira o negrito do espaço e do "e".
+function ajustarNomesPais(xmlOriginal, m) {
+  let xml = xmlOriginal;
+  const temMae = String(m.NOMEMA || '').trim() !== '';
+  const temPai = String(m.NOMEPAI || '').trim() !== '';
+  const trecho = acharTrechoEntre(xml, '#NOMEMA', '#NOMEPAI');
+  if (temMae && temPai) {
+    if (!trecho) return xml;
+    return xml.slice(0, trecho[0]) + tiraNegrito(xml.slice(trecho[0], trecho[1])) + xml.slice(trecho[1]);
+  }
+  if (trecho) xml = xml.slice(0, trecho[0]) + xml.slice(trecho[1]);
+  if (!temPai) xml = removerRunDoMarcador(xml, '#NOMEPAI');
+  if (!temMae) {
+    xml = removerRunDoMarcador(xml, '#NOMEMA');
+    xml = limparEspacosDoMarcador(xml, '#NOMEPAI');
+  }
+  return xml;
+}
+
+// Deixa todo o texto preto: o modelo traz as runs dos marcadores em vermelho.
+function textoPreto(xml) {
+  return xml.replace(
+    /(<w:color\b[^>]*\bw:val=")[^"]*(")/g,
+    (trecho, abre, fecha) => `${abre}000000${fecha}`
+  );
 }
 
 // Aplica o dicionário sobre o document.xml: funde as runs dos marcadores e
@@ -275,6 +372,9 @@ function aplicarDeclaracao(xmlOriginal, m) {
     if (nome === 'DATA') continue; // DATA não tem '#' no modelo
     xml = fundirRuns(xml, `#${nome}`);
   }
+  xml = semNegritoNoMarcador(xml, '#NOMEPAI');
+  xml = semNegritoNoMarcador(xml, '#NOMEMA');
+  xml = ajustarNomesPais(xml, m);
   for (const [nome, valor] of Object.entries(m)) {
     if (nome === 'DATA') {
       xml = substituirTexto(xml, 'DATA', valor);
@@ -282,7 +382,7 @@ function aplicarDeclaracao(xmlOriginal, m) {
     }
     xml = substituirTexto(xml, `#${nome}`, valor);
   }
-  return xml;
+  return textoPreto(xml);
 }
 
 function sobraMarcador(xml) {

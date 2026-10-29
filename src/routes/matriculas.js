@@ -1,6 +1,7 @@
 const express = require('express');
 const { validarData, dataLocal } = require('../utils/data');
 const { agora, dataBaseCenso, ehPosCenso, ehRetorno, marcarRetornos } = require('../db');
+const { exigirTurmaAberta } = require('./encerramento');
 
 const STATUS_VALIDOS = ['matriculado', 'transferido_intercampus', 'transferido_externo',
   'deixou_frequentar', 'matricula_cancelada'];
@@ -91,6 +92,8 @@ function rotasMatriculas({ db }) {
 
     if (Object.keys(campos).length > 0) throw erro(400, 'Corrija os campos destacados.', campos);
 
+    exigirTurmaAberta(db, turma.id);
+
     const matriculaAtiva = db
       .prepare("SELECT id, matricula FROM matriculas WHERE aluno_id = ? AND ativo = 1")
       .get(alunoId);
@@ -151,6 +154,7 @@ function rotasMatriculas({ db }) {
     const id = Number(requisicao.params.id);
     const matricula = db.prepare('SELECT * FROM matriculas WHERE id = ?').get(id);
     if (!matricula) throw erro(404, 'Matrícula não encontrada.');
+    exigirTurmaAberta(db, matricula.turma_id);
 
     if (matricula.status !== 'matriculado' || !matricula.ativo) {
       throw erro(409, 'Somente aluno com matrícula ativa (status: matriculado) pode ser transferido.');
@@ -175,6 +179,7 @@ function rotasMatriculas({ db }) {
     const id = Number(requisicao.params.id);
     const matricula = db.prepare('SELECT * FROM matriculas WHERE id = ?').get(id);
     if (!matricula) throw erro(404, 'Matrícula não encontrada.');
+    exigirTurmaAberta(db, matricula.turma_id);
 
     if (!TIPOS_TRANSFERENCIA.includes(matricula.status)) {
       throw erro(409, 'Somente matrícula já transferida pode ser corrigida.');
@@ -199,6 +204,7 @@ function rotasMatriculas({ db }) {
     const id = Number(requisicao.params.id);
     const matricula = db.prepare('SELECT * FROM matriculas WHERE id = ?').get(id);
     if (!matricula) throw erro(404, 'Matrícula não encontrada.');
+    exigirTurmaAberta(db, matricula.turma_id);
 
     if (!TIPOS_TRANSFERENCIA.includes(matricula.status)) {
       throw erro(409, 'Somente matrícula já transferida pode ser desfeita.');
@@ -229,6 +235,7 @@ function rotasMatriculas({ db }) {
     const id = Number(requisicao.params.id);
     const matricula = db.prepare('SELECT * FROM matriculas WHERE id = ?').get(id);
     if (!matricula) throw erro(404, 'Matrícula não encontrada.');
+    exigirTurmaAberta(db, matricula.turma_id);
 
     if (matricula.status !== 'matriculado' || !matricula.ativo) {
       throw erro(409, 'Somente aluno com matrícula ativa (status: matriculado) pode ser marcado como deixou de frequentar.');
@@ -249,6 +256,7 @@ function rotasMatriculas({ db }) {
     const id = Number(requisicao.params.id);
     const matricula = db.prepare('SELECT * FROM matriculas WHERE id = ?').get(id);
     if (!matricula) throw erro(404, 'Matrícula não encontrada.');
+    exigirTurmaAberta(db, matricula.turma_id);
 
     if (matricula.status !== 'deixou_frequentar') {
       throw erro(409, 'Somente matrícula marcada como deixou de frequentar pode ser desfeita.');

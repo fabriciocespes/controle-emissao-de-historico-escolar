@@ -71,6 +71,26 @@ h1, h2 { margin: 0; font-weight: 650; }
   color: #7a5c00;
 }
 .btn.amarelo:hover { background: #ffe98a; border-color: #f0c420; }
+/* Gerar Declaração (modal Ver aluno): destaque com fundo amarelo e texto preto. */
+.btn.declaracao {
+  background: #ffd43b;
+  border-color: #e8b800;
+  color: #000;
+}
+.btn.declaracao:hover { background: #ffe066; border-color: #f0c400; }
+/* Combo de ações do aluno (ao lado do botão de declaração): caixa verde
+   clara, com a mesma altura do botão .btn.mini (altura fixa igual). */
+.cartao-cabecalho .cabecalho-acoes #acoes-aluno {
+  background: #b2f2bb;
+  border: 1px solid #40c057;
+  border-radius: 8px;
+  height: 27px;
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 650;
+  color: #000;
+}
+.cartao-cabecalho .cabecalho-acoes #acoes-aluno:hover { background: #c3f7cd; }
 
 /* ---------- Login ---------- */
 .tela-login {
@@ -297,6 +317,45 @@ h1, h2 { margin: 0; font-weight: 650; }
 .aba.ativa .badge { background: #fff; }
 
 .conteudo { padding: 22px; max-width: 1320px; width: 100%; margin: 0 auto; flex: 1; }
+
+/* ---------- Rodapé "Sobre o sistema" (todas as telas) ---------- */
+.rodape-sistema {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  background: #0f172a;
+  color: #cbd5e1;
+  border-top: 1px solid #1e293b;
+  padding: 18px 22px;
+  display: grid;
+  grid-template-columns: 1.5fr 1fr 1.2fr;
+  gap: 26px;
+}
+.rodape-sistema h2 { font-size: 14px; color: #fff; margin: 0 0 8px; }
+.rodape-sistema strong { color: #fff; font-size: 14.5px; }
+.rodape-sistema p { margin: 6px 0 0; font-size: 13.5px; line-height: 1.5; }
+.rodape-sistema-versao {
+  display: inline-block;
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: #94a3b8;
+  background: #1e293b;
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+.rodape-sistema-link {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 13.5px;
+  color: #93c5fd;
+  text-decoration: none;
+}
+.rodape-sistema-link:hover { text-decoration: underline; }
+.rodape-sistema-linha span { color: #94a3b8; }
+.rodape-sistema-linha b { color: #e2e8f0; font-weight: 600; }
+.rodape-sistema-autor { color: #94a3b8; }
+.rodape-sistema-autor a { color: #93c5fd; text-decoration: none; font-weight: 600; }
+.rodape-sistema-autor a:hover { text-decoration: underline; }
 .painel {
   background: var(--cartao);
   border: 1px solid var(--linha);
@@ -412,6 +471,11 @@ tr.deixou td.negrito { color: var(--vermelho); }
 .resumo-acao .rotulo { font-size: 12.5px; color: var(--laranja-texto); font-weight: 650; }
 .resumo-acao .valor { font-size: 15px; font-weight: 650; }
 .vazio { text-align: center; color: var(--texto-suave); padding: 30px 10px; margin: 0; }
+
+/* ---------- Relatórios ---------- */
+#relatorio-status { margin-left: 12px; }
+.relatorio-grupo td { background: #eef2f7; font-weight: 650; }
+.relatorio-totais td { border-top: 2px solid #cbd5e1; background: #f8fafc; }
 
 /* ---------- Modais ---------- */
 .modal {
@@ -726,4 +790,5 @@ tr.deixou td.negrito { color: var(--vermelho); }
   .seletor-grade { grid-template-columns: 1fr; }
   .grade, .grade-3 { grid-template-columns: 1fr; }
   .tabela-rolagem { max-height: none; }
+  .rodape-sistema { grid-template-columns: 1fr; gap: 16px; padding: 16px 14px; }
 }

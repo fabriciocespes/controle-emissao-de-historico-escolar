@@ -8,13 +8,20 @@ Documentação completa: instalação, uso diário, permissões, backup e manute
 
 Aplicação local para controlar a emissão e entrega de Históricos Escolar de alunos, com:
 
-- **3 filas de trabalho:** *A confeccionar* → *Prontos* → *Entregues*
+- **Filas de trabalho:** *A confeccionar* → *Prontos* → *Entregues*, mais a aba **Devendo Histórico**
 - Anexo do PDF do histórico (pelo explorador do Windows)
+- **Cadastros** de alunos (CPF validado, filiação, responsável, deficiências/CID), funcionários/professores e turmas
+- **Enturmações:** matrícula individual ou em lote, Diário da turma e alocação de professores por período
+- **Documentos em Word (.docx):** Ficha de Matrícula e Declaração Escolar, gerados a partir dos modelos oficiais
+- **Relatórios** com prévia em tela e geração de PDF (Matrículas Pós-Censo, Quadro de Turmas, Mapa de Alunos…)
+- **Encerramento do ano letivo:** fechar/reabrir turma registrando a situação final de cada aluno
+- **Calendário do ano letivo** (PDF anexado pelo administrador)
 - Cadastro de usuários com perfis (administrador / operador)
 - Cabeçalho com logo, nome e código INEP da escola
+- Rodapé fixo **Sobre o sistema** (versão, desenvolvedor e informações técnicas)
 - Uso em rede local (vários computadores no mesmo servidor)
 
-**Tecnologia:** Node.js 24 + Express + SQLite (banco em arquivo único). Não precisa de banco de dados instalado, nem de internet para usar.
+**Tecnologia:** Node.js 24 + Express + PDFKit (geração de PDF) + SQLite (banco em arquivo único). Não precisa de banco de dados instalado, nem de internet para usar.
 
 ---
 
@@ -62,7 +69,7 @@ Aplicação local para controlar a emissão e entrega de Históricos Escolar de 
 Mostra **logo (2 cm × 2 cm)**, **nome completo da escola** e **código INEP**.
 Só o **administrador** pode alterar: botão *Editar dados da escola* → informar logo (PNG, JPG, WebP ou GIF até 2 MB — o arquivo é copiado para a pasta do sistema), nome e INEP (8 dígitos).
 
-### 4.2 As três filas (abas)
+### 4.2 As filas de trabalho (abas)
 
 | Aba | Significado | Ações disponíveis |
 |---|---|---|
@@ -104,6 +111,70 @@ Na fila *Prontos* → **Registrar entrega** → data + quem recebeu (nome e CPF)
 - **Editar:** disponível para **todos os usuários** nas três filas (mesmo formulário da inclusão, com as mesmas regras).
 - **Excluir:** apenas **administradores**. Antes de apagar, o sistema mostra **todos os dados vinculados** (histórico, PDF, entregas etc.) e exige confirmação. A exclusão é feita em transação: ou apaga tudo, ou não apaga nada.
 
+### 4.7 Devendo Histórico
+
+Aba **Devendo Histórico**: alunos que ficaram com um histórico em pendência (emprestado).
+
+- **Adicionar à lista:** informe o aluno (busca por nome/CPF), a data e a observação — aluno já listado é recusado.
+- **Registrar entrega:** data + quem recebeu — o aluno sai da lista.
+- O campo **Devendo histórico (Sim/Não)** na ficha do aluno sincroniza com esta aba.
+
+### 4.8 Cadastros (Alunos, Funcionários e Turmas)
+
+| Aba | O que se cadastra | Ações |
+|---|---|---|
+| **Alunos** | Identificação, filiação 1 e 2, responsável, endereço, deficiências/transtornos, dados escolares anteriores | **+ Novo aluno**, **Importar CSV**, busca, Ver/Editar/Excluir¹ |
+| **Funcionários** | Professores e demais servidores: cargo, função, admissão, formação, situação | **+ Novo funcionário**, **Importar CSV**, busca, Editar/Excluir¹ |
+| **Turmas** | Ano letivo, matriz (Educação Infantil, EF Anos Iniciais, EF Anos Finais), ano de escolaridade, sigla, turno e tipo (NAI/NAF) | **+ Nova turma**, busca, Editar/Excluir¹ |
+
+- O **CPF é validado** (precisa ser um CPF real); aluno e funcionário são buscados por nome, CPF ou matrícula.
+- A **sigla da turma é única dentro do ano letivo** — o sistema recusa a duplicata na criação e na edição.
+- Turmas já encerradas aparecem com a etiqueta **Fechada** (ver seção 4.10).
+- ¹ *Excluir é restrito ao administrador; antes de apagar, o sistema mostra tudo que depende daquele cadastro.*
+
+### 4.9 Enturmações (Matrícula, Diário e Professor)
+
+- **Matrícula:** matricule alunos existentes (busca + **Matricular selecionados** para vários de uma vez, em lote) ou cadastre um aluno novo já com matrícula (**+ Inserir Aluno Novo**). A matrícula gera **número automático** e impede o mesmo aluno duas vezes na mesma turma. Alunos matriculados após a Data Base CENSO ficam marcados como **Matriculado pós-censo**.
+- **Diário:** escolha ano letivo e turma para ver os alunos em ordem alfabética com a situação (matriculado, transferido, deixou de frequentar, pós-censo, retorno). Daqui saem as ações de **transferir**, **deixou de frequentar** e **desfazer**, o botão **Gerar Ficha Matrícula** (Word) e a remoção do aluno da turma (devolve à lista de matrícula).
+- **Professor (alocação):** associe professores às turmas com **período (início e fim)**. O sistema **impede conflito de turno** para a mesma pessoa (CPF) e exige data de inativação para inativar um professor alocado. Exclusão da alocação: administrador.
+
+### 4.10 Ano letivo: Calendário, Fechar e Reabrir
+
+- **Calendário do ano letivo:** exibe o PDF anexado pelo administrador (seção 4.13), na própria tela ou em nova aba.
+- **Fechar ano letivo:** escolha o ano e a turma, informe a **situação final** de todos os alunos e clique em **Fechar turma** — o fechamento é em lote e grava em tabela própria.
+  - *Ensino Fundamental (1º ao 9º):* Aprovado, Reprovado, Reprovado por frequência, Deixou de frequentar, Transferido.
+  - *Educação Infantil (Grupos 1–3 e Pré 1–2):* Continuidade de estudos, Transferido, Deixou de frequentar.
+  - Se faltar alguma situação, o sistema lista os alunos faltantes e **não fecha**. Turma fechada **congela as matrículas** (não deixa matricular, transferir nem remover).
+- **Reabrir ano letivo:** escolha a turma fechada e confirme na janela de confirmação — as situações já registradas ficam **preservadas** e liberadas para alteração; ao fechar de novo pela tela de Fechar, elas são atualizadas.
+- **Regra do próximo ano:** enquanto houver turma aberta ou aluno sem situação final no ano anterior, **o sistema não deixa criar turmas no ano seguinte** (avisa quais turmas/alunos faltam).
+
+### 4.11 Relatórios
+
+Escolha um **modelo pronto** (Matrículas Pós-Censo, Quadro de Turmas, Mapa de Alunos…) ou monte do zero: **fonte de dados**, **campos**, **filtros**, **agrupar por** e **ordenar**.
+
+- **Gerar prévia** mostra até 100 linhas na tela (com linhas de grupo e totais quando o campo soma) e avisa se o relatório é maior.
+- **Baixar PDF** gera o relatório completo (até 5000 linhas), com rodapé numerado.
+- Disponível para administrador e operador.
+
+### 4.12 Documentos em Word (.docx)
+
+- **Ficha de Matrícula:** no **Diário**, junto às ações do aluno — preenche o formulário oficial com os dados do aluno e baixa o `.docx`.
+- **Declaração Escolar:** na visualização do aluno (**Ver aluno**), botão **Gerar Declaração** — tipos *Comprovação de Escolaridade* e *Transferência*, com situação e situação final; o sistema valida o que combinam com a situação da matrícula, preenche o modelo oficial e baixa o `.docx`. Só aparece para aluno com matrícula.
+
+### 4.13 Administração (somente administrador)
+
+- **Ano letivo:** datas de **início** e **término** e **Data Base CENSO** (padrão: última quarta-feira de maio do ano corrente). As datas entram como padrão na alocação de professores.
+- **Calendário (PDF):** anexar ou substituir o PDF do calendário escolar do ano.
+- **Dados da escola** (logo, nome, INEP): ficam no cabeçalho — seção 4.1.
+
+### 4.14 Rodapé "Sobre o sistema" (todas as telas)
+
+O rodapé escuro, presente em todas as telas, mostra três colunas:
+
+- **Sobre o sistema** — nome, descrição, **versão** e **Desenvolvido por Fabrício Cespes** (link para o GitHub).
+- **Links úteis** — link da documentação (este manual no GitHub).
+- **Informações técnicas** — servidor (máquina:porta), versão do Node.js e última atualização do sistema.
+
 ---
 
 ## 5. Usuários e permissões
@@ -118,6 +189,12 @@ Menu **Usuários** (somente administrador):
 | Criar e editar pedidos | ✅ | ✅ |
 | Marcar confecção / entrega | ✅ | ✅ |
 | Ver PDFs / buscar | ✅ | ✅ |
+| Cadastros (alunos, funcionários, turmas) | ✅ | ✅ |
+| Matrículas, Diário e alocação de professores | ✅ | ✅ |
+| Fechar / Reabrir ano letivo | ✅ | ✅ |
+| Relatórios (prévia e PDF) | ✅ | ✅ |
+| Devendo histórico e documentos (.docx) | ✅ | ✅ |
+| Ano letivo e calendário (Administração) | ✅ | ❌ |
 | **Excluir qualquer dado** | ✅ | ❌ |
 | Gerenciar usuários | ✅ | ❌ |
 | Dados da escola (logo, nome, INEP) | ✅ | ❌ (só visualiza) |
@@ -191,7 +268,7 @@ Abre em `http://localhost:3000`. Pastas `data/` e `pdfs/` são criadas automatic
 ```
 
 - `host`: `127.0.0.1` = só o próprio PC; `0.0.0.0` = aceita a rede local.
-- Variáveis de ambiente: `PORT`, `HOST`, `DB_PATH`, `PDF_ROOT`, `LOGO_DIR`.
+- Variáveis de ambiente: `PORT`, `HOST`, `DB_PATH`, `PDF_ROOT`, `LOGO_DIR`, `CALENDARIO_DIR`, `CONFIG_PATH`.
 
 ### 9.3 Iniciar com o Windows (opcional)
 
@@ -214,16 +291,21 @@ Agendador de Tarefas → nova tarefa "Iniciar ao logar" → executar:
 historico-escolar/
 ├─ server.js            # sobe o servidor
 ├─ config.json          # porta, host, pasta de PDFs
-├─ package.json         # dependências (apenas Express)
+├─ package.json         # dependências: express + pdfkit (dev: @playwright/test)
 ├─ src/
-│  ├─ app.js            # cria o app Express + tratamento de erros
+│  ├─ app.js            # cria o app Express + gate de sessão/CSRF + tratamento de erros
 │  ├─ auth.js           # sessão, CSRF, perfis
 │  ├─ config.js         # leitura de configuração
-│  ├─ db.js             # banco SQLite + criação das tabelas + seed
-│  ├─ routes/           # auth, pedidos, usuarios, escola, arquivos
-│  └─ utils/            # cpf, data, texto, senha, arquivos, dependências
-├─ public/              # interface (index.html, js, css)
-├─ tests/smoke.test.js  # 25 testes automatizados
+│  ├─ db.js             # banco SQLite + criação das tabelas + migrações + seed
+│  ├─ routes/           # auth, pedidos, usuarios, escola, arquivos, ano-letivo,
+│  │                    # alunos, funcionarios, turmas, alocacoes, matriculas,
+│  │                    # diario, devendo, relatorios, encerramento, sobre
+│  ├─ services/         # relatorios, pdfRelatorio, fichaMatricula, declaracaoEscolar
+│  └─ utils/            # cpf, data, texto, senha, arquivos, csv, dependências
+├─ public/              # interface (index.html, js/app.js, css/styles.css)
+├─ tests/
+│  ├─ smoke.test.js     # testes de API (71)
+│  └─ e2e/              # testes de interface Playwright (31, um arquivo por módulo)
 ├─ instalador/          # script do instalador + atalhos .vbs
 ├─ data/                # BANCO (não versionar)
 └─ pdfs/                # PDFs dos alunos (não versionar)
@@ -232,9 +314,14 @@ historico-escolar/
 ### 9.6 Testes
 
 ```bat
-npm test
+node --test tests/smoke.test.js   # testes de API (71)
+npx playwright test               # testes de interface (31; usa a porta 3100)
 ```
-25 testes: login, permissões, CRUD de pedidos, regra de datas, exclusão com confirmação, anexo de PDF, dados da escola etc.
+
+- Na primeira vez, instalar o navegador dos testes: `npx playwright install chromium`.
+- `npm test` roda a descoberta padrão do Node (`node --test`).
+- Cobrem: login/permissões, pedidos e regra de datas, cadastros, CSV, matrículas e lote, diário, transferências/retornos, pós-censo, alocação de professores, documentos em Word (ficha e declaração), relatórios (prévia e PDF), **encerramento do ano letivo** e o rodapé **Sobre**.
+- Os testes de interface sobem o próprio servidor E2E em `localhost:3100` com banco temporário — deixe a porta 3100 livre.
 
 ---
 
@@ -253,4 +340,4 @@ npm test
 
 ---
 
-*Documento do sistema — Histórico Escolar. Versão 1.0.*
+*Documento do sistema — Histórico Escolar. Versão 1.0 — atualizado em 29/10/2026. Desenvolvido por Fabrício Cespes.*

@@ -236,6 +236,8 @@ CREATE TABLE IF NOT EXISTS turmas (
   turno             TEXT NOT NULL CHECK (turno IN ('Manhã', 'Tarde', 'Integral')),
   tipo_turma        TEXT CHECK (tipo_turma IS NULL OR tipo_turma IN ('NAI', 'NAF')),
   busca_norm        TEXT NOT NULL,
+  fechada           INTEGER NOT NULL DEFAULT 0,
+  fechada_em        TEXT,
   criado_por        INTEGER REFERENCES usuarios(id),
   criado_em         TEXT NOT NULL,
   atualizado_em     TEXT NOT NULL
@@ -284,6 +286,36 @@ CREATE TABLE IF NOT EXISTS matriculas (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_matriculas_numero ON matriculas(matricula);
 CREATE INDEX IF NOT EXISTS idx_matriculas_aluno ON matriculas(aluno_id);
 CREATE INDEX IF NOT EXISTS idx_matriculas_turma ON matriculas(turma_id);
+
+-- Situação final do aluno ao fim do ano letivo (encerramento do ano).
+-- Uma linha por matrícula; gravada em lote quando a turma é fechada.
+CREATE TABLE IF NOT EXISTS situacoes_finais (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  turma_id      INTEGER NOT NULL REFERENCES turmas(id) ON DELETE CASCADE,
+  matricula_id  INTEGER NOT NULL REFERENCES matriculas(id) ON DELETE CASCADE,
+  aluno_id      INTEGER NOT NULL REFERENCES alunos(id) ON DELETE CASCADE,
+  ano_letivo    INTEGER NOT NULL,
+  situacao      TEXT NOT NULL
+                CHECK (situacao IN ('aprovado', 'reprovado', 'reprovado_freq',
+                                    'transferido', 'deixou_frequentar', 'continuidade')),
+  registrado_em TEXT NOT NULL,
+  atualizado_em TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_situacoes_finais_matricula ON situacoes_finais(matricula_id);
+CREATE INDEX IF NOT EXISTS idx_situacoes_finais_turma ON situacoes_finais(turma_id);
+CREATE INDEX IF NOT EXISTS idx_situacoes_finais_ano ON situacoes_finais(ano_letivo);
+
+CREATE TABLE IF NOT EXISTS relatorio_perfis (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  usuario_id    INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
+  nome          TEXT NOT NULL,
+  config        TEXT NOT NULL,
+  criado_em     TEXT NOT NULL,
+  atualizado_em TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_relatorio_perfis_usuario ON relatorio_perfis(usuario_id);
 `;
 
 function agora() {
@@ -396,6 +428,17 @@ function migrar(db) {
     }
     if (!colunasAno.includes('data_base_censo')) {
       db.exec('ALTER TABLE ano_letivo ADD COLUMN data_base_censo TEXT');
+    }
+  }
+
+  // Encerramento do ano letivo: marcação de turma fechada.
+  const colunasTurmas = db.prepare('PRAGMA table_info(turmas)').all().map((c) => c.name);
+  if (colunasTurmas.length) {
+    if (!colunasTurmas.includes('fechada')) {
+      db.exec('ALTER TABLE turmas ADD COLUMN fechada INTEGER NOT NULL DEFAULT 0');
+    }
+    if (!colunasTurmas.includes('fechada_em')) {
+      db.exec('ALTER TABLE turmas ADD COLUMN fechada_em TEXT');
     }
   }
 
