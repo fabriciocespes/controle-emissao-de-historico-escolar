@@ -323,23 +323,23 @@ h1, h2 { margin: 0; font-weight: 650; }
   position: sticky;
   bottom: 0;
   z-index: 5;
-  background: #0f172a;
-  color: #cbd5e1;
-  border-top: 1px solid #1e293b;
+  background: var(--fundo);
+  color: var(--texto-suave);
+  border-top: 1px solid var(--linha);
   padding: 18px 22px;
   display: grid;
   grid-template-columns: 1.5fr 1fr 1.2fr;
   gap: 26px;
 }
-.rodape-sistema h2 { font-size: 14px; color: #fff; margin: 0 0 8px; }
-.rodape-sistema strong { color: #fff; font-size: 14.5px; }
+.rodape-sistema h2 { font-size: 14px; color: var(--texto); margin: 0 0 8px; }
+.rodape-sistema strong { color: var(--texto); font-size: 14.5px; }
 .rodape-sistema p { margin: 6px 0 0; font-size: 13.5px; line-height: 1.5; }
 .rodape-sistema-versao {
   display: inline-block;
   margin-top: 10px;
   font-size: 12.5px;
-  color: #94a3b8;
-  background: #1e293b;
+  color: var(--texto-suave);
+  background: #e2e8f0;
   border-radius: 999px;
   padding: 2px 10px;
 }
@@ -347,14 +347,14 @@ h1, h2 { margin: 0; font-weight: 650; }
   display: inline-block;
   margin-top: 4px;
   font-size: 13.5px;
-  color: #93c5fd;
+  color: var(--primaria);
   text-decoration: none;
 }
 .rodape-sistema-link:hover { text-decoration: underline; }
-.rodape-sistema-linha span { color: #94a3b8; }
-.rodape-sistema-linha b { color: #e2e8f0; font-weight: 600; }
-.rodape-sistema-autor { color: #94a3b8; }
-.rodape-sistema-autor a { color: #93c5fd; text-decoration: none; font-weight: 600; }
+.rodape-sistema-linha span { color: var(--texto-suave); }
+.rodape-sistema-linha b { color: var(--texto); font-weight: 600; }
+.rodape-sistema-autor { color: var(--texto-suave); }
+.rodape-sistema-autor a { color: var(--primaria); text-decoration: none; font-weight: 600; }
 .rodape-sistema-autor a:hover { text-decoration: underline; }
 .painel {
   background: var(--cartao);
