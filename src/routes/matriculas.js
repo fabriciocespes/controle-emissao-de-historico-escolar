@@ -94,9 +94,17 @@ function rotasMatriculas({ db }) {
 
     exigirTurmaAberta(db, turma.id);
 
+    // Bloqueia só se o aluno já estiver com matrícula ativa em ano igual ou
+    // posterior ao de destino (a matrícula do ano encerrado permanece ativa
+    // como histórico e não impede a virada para o novo ano).
     const matriculaAtiva = db
-      .prepare("SELECT id, matricula FROM matriculas WHERE aluno_id = ? AND ativo = 1")
-      .get(alunoId);
+      .prepare(
+        `SELECT m.id, m.matricula FROM matriculas m
+           JOIN turmas t ON t.id = m.turma_id
+          WHERE m.aluno_id = ? AND m.ativo = 1 AND t.ano_letivo >= ?
+          ORDER BY t.ano_letivo DESC LIMIT 1`
+      )
+      .get(alunoId, turma.ano_letivo);
     if (matriculaAtiva) {
       throw erro(409, 'Este aluno já possui uma matrícula ativa. Cancele ou finalize a matrícula anterior antes de matricular novamente.');
     }
@@ -210,9 +218,21 @@ function rotasMatriculas({ db }) {
       throw erro(409, 'Somente matrícula já transferida pode ser desfeita.');
     }
 
+    // Conta apenas matrículas ativas de anos iguais ou posteriores: a
+    // matrícula histórica do ano encerrado permanece ativa e não bloqueia.
     const posteriorAtiva = db
-      .prepare('SELECT id FROM matriculas WHERE aluno_id = ? AND id <> ? AND ativo = 1')
-      .get(matricula.aluno_id, id);
+      .prepare(
+        `SELECT m.id FROM matriculas m
+           JOIN turmas t ON t.id = m.turma_id
+          WHERE m.aluno_id = ? AND m.id <> ? AND m.ativo = 1
+            AND t.ano_letivo >= (
+              SELECT t2.ano_letivo FROM matriculas m2
+                JOIN turmas t2 ON t2.id = m2.turma_id
+               WHERE m2.id = ?
+            )
+          LIMIT 1`
+      )
+      .get(matricula.aluno_id, id, id);
     if (posteriorAtiva) {
       throw erro(409, 'Este aluno já tem outra matrícula ativa depois da transferência. Corrija os dados da transferência em vez de desfazê-la.');
     }
@@ -262,9 +282,21 @@ function rotasMatriculas({ db }) {
       throw erro(409, 'Somente matrícula marcada como deixou de frequentar pode ser desfeita.');
     }
 
+    // Conta apenas matrículas ativas de anos iguais ou posteriores: a
+    // matrícula histórica do ano encerrado permanece ativa e não bloqueia.
     const posteriorAtiva = db
-      .prepare('SELECT id FROM matriculas WHERE aluno_id = ? AND id <> ? AND ativo = 1')
-      .get(matricula.aluno_id, id);
+      .prepare(
+        `SELECT m.id FROM matriculas m
+           JOIN turmas t ON t.id = m.turma_id
+          WHERE m.aluno_id = ? AND m.id <> ? AND m.ativo = 1
+            AND t.ano_letivo >= (
+              SELECT t2.ano_letivo FROM matriculas m2
+                JOIN turmas t2 ON t2.id = m2.turma_id
+               WHERE m2.id = ?
+            )
+          LIMIT 1`
+      )
+      .get(matricula.aluno_id, id, id);
     if (posteriorAtiva) {
       throw erro(409, 'Este aluno já tem outra matrícula ativa. Cancele a matrícula atual antes de desfazer esta ação.');
     }
@@ -282,4 +314,4 @@ function rotasMatriculas({ db }) {
   return roteador;
 }
 
-module.exports = { rotasMatriculas };
+module.exports = { rotasMatriculas, gerarNumeroMatricula };

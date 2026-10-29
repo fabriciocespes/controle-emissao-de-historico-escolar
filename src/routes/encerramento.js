@@ -61,6 +61,53 @@ function alunosDaTurma(db, turmaId) {
     .all(turmaId);
 }
 
+// Próximo ano letivo só pode ser aberto depois de encerrar o anterior:
+// todas as turmas do ano anterior fechadas e com a situação final de
+// todos os alunos registrada em situacoes_finais. Usada pelo cadastro de
+// turmas (turmas.js) e pela virada do período na Administração (anoLetivo.js).
+function exigirAnoAnteriorEncerrado(db, ano) {
+  const anteriores = db
+    .prepare('SELECT id, sigla, fechada FROM turmas WHERE ano_letivo = ?')
+    .all(ano - 1);
+  if (anteriores.length === 0) return;
+
+  const abertas = anteriores.filter((t) => !t.fechada);
+  if (abertas.length > 0) {
+    const siglas = abertas.map((t) => t.sigla).join(', ');
+    throw erro(
+      409,
+      `Feche o ano letivo de ${ano - 1} antes de abrir turmas em ${ano}. Turmas ainda abertas: ${siglas}.`
+    );
+  }
+
+  const semSituacao = db
+    .prepare(
+      `SELECT DISTINCT a.nome, t.sigla
+         FROM turmas t
+         JOIN matriculas m ON m.turma_id = t.id
+         JOIN alunos a ON a.id = m.aluno_id
+         LEFT JOIN situacoes_finais sf ON sf.matricula_id = m.id
+        WHERE t.ano_letivo = ?
+          AND sf.id IS NULL
+          AND (m.ativo = 1 OR m.status IN ('transferido_intercampus',
+              'transferido_externo', 'deixou_frequentar'))
+          AND NOT EXISTS (
+            SELECT 1 FROM matriculas m2
+             WHERE m2.aluno_id = m.aluno_id AND m2.turma_id = m.turma_id
+               AND m2.ativo = 1 AND m2.id <> m.id
+          )`
+    )
+    .all(ano - 1);
+  if (semSituacao.length > 0) {
+    const nomes = semSituacao.slice(0, 5).map((l) => `${l.nome} (${l.sigla})`).join(', ');
+    const resto = semSituacao.length > 5 ? ` e mais ${semSituacao.length - 5}` : '';
+    throw erro(
+      409,
+      `Registre a situação final de todos os alunos de ${ano - 1} antes de abrir turmas em ${ano}. Faltam: ${nomes}${resto}.`
+    );
+  }
+}
+
 function rotasEncerramento({ db }) {
   const roteador = express.Router();
 
@@ -179,4 +226,4 @@ function rotasEncerramento({ db }) {
   return roteador;
 }
 
-module.exports = { rotasEncerramento, exigirTurmaAberta };
+module.exports = { rotasEncerramento, exigirTurmaAberta, alunosDaTurma, exigirAnoAnteriorEncerrado };

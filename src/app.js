@@ -17,6 +17,7 @@ const { rotasDevendo } = require('./routes/devendo');
 const { rotasDiario } = require('./routes/diario');
 const { rotasRelatorios } = require('./routes/relatorios');
 const { rotasEncerramento } = require('./routes/encerramento');
+const { rotasMigracao } = require('./routes/migracao');
 const { rotasSobre } = require('./routes/sobre');
 
 const METODOS_SEGUROS = ['GET', 'HEAD', 'OPTIONS'];
@@ -61,6 +62,7 @@ function criarApp({ db, config }) {
   app.use('/api/diario', rotasDiario({ db, config }));
   app.use('/api/relatorios', rotasRelatorios({ db, config }));
   app.use('/api/encerramento', rotasEncerramento({ db }));
+  app.use('/api/migracao', exigirPerfil('admin'), rotasMigracao({ db }));
   app.use('/api/sobre', rotasSobre({ config }));
 
   app.use('/api', (requisicao, resposta) =>

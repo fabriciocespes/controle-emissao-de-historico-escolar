@@ -4,6 +4,7 @@ const path = require('node:path');
 const { exigirPerfil } = require('../auth');
 const { agora, recalcularPosCenso } = require('../db');
 const { validarData } = require('../utils/data');
+const { exigirAnoAnteriorEncerrado } = require('./encerramento');
 
 const ARQUIVO_CALENDARIO = 'calendario.pdf';
 
@@ -101,6 +102,18 @@ function rotasAnoLetivo({ db, config }) {
     if (Object.keys(campos).length > 0) throw erro(400, 'Corrija os campos destacados.', campos);
 
     const anterior = lerLinha();
+
+    // Virada para um ano novo só depois de encerrar o anterior (mesma regra
+    // das turmas): turmas do ano anterior fechadas e com situação final
+    // registrada. Ajustes de datas dentro do mesmo ano seguem livres.
+    const novoAno = Number(dataInicio.slice(0, 4));
+    const anoAnterior = anterior && anterior.data_inicio
+      ? Number(String(anterior.data_inicio).slice(0, 4))
+      : null;
+    if (anoAnterior === null || novoAno > anoAnterior) {
+      exigirAnoAnteriorEncerrado(db, novoAno);
+    }
+
     db.prepare(
       `INSERT INTO ano_letivo (id, data_inicio, data_fim, data_base_censo, calendario_arquivo, atualizado_em)
        VALUES (1, ?, ?, ?, ?, ?)

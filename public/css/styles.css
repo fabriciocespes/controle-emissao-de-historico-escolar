@@ -477,6 +477,10 @@ tr.deixou td.negrito { color: var(--vermelho); }
 .relatorio-grupo td { background: #eef2f7; font-weight: 650; }
 .relatorio-totais td { border-top: 2px solid #cbd5e1; background: #f8fafc; }
 
+/* Migração do novo ano: coluna estreita de seleção. */
+#corpo-migracao td:first-child { width: 34px; text-align: center; }
+#corpo-migracao td:last-child { white-space: nowrap; }
+
 /* ---------- Modais ---------- */
 .modal {
   position: fixed;

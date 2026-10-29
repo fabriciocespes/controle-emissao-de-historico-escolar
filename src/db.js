@@ -306,6 +306,23 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_situacoes_finais_matricula ON situacoes_fi
 CREATE INDEX IF NOT EXISTS idx_situacoes_finais_turma ON situacoes_finais(turma_id);
 CREATE INDEX IF NOT EXISTS idx_situacoes_finais_ano ON situacoes_finais(ano_letivo);
 
+-- Migração em lote de alunos do ano anterior para o novo ano letivo.
+-- Uma linha por operação; as matrículas criadas apontam para ela
+-- (matriculas.migracao_id) para permitir o desfazer em lote.
+CREATE TABLE IF NOT EXISTS migracoes (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  turma_origem_id  INTEGER NOT NULL REFERENCES turmas(id) ON DELETE CASCADE,
+  turma_destino_id INTEGER NOT NULL REFERENCES turmas(id) ON DELETE CASCADE,
+  total            INTEGER NOT NULL DEFAULT 0,
+  desfeita_em      TEXT,
+  criado_por       INTEGER REFERENCES usuarios(id),
+  criado_em        TEXT NOT NULL,
+  atualizado_em    TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_migracoes_origem ON migracoes(turma_origem_id);
+CREATE INDEX IF NOT EXISTS idx_migracoes_destino ON migracoes(turma_destino_id);
+
 CREATE TABLE IF NOT EXISTS relatorio_perfis (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   usuario_id    INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
@@ -465,6 +482,10 @@ function migrar(db) {
     db.exec('ALTER TABLE matriculas ADD COLUMN retorno INTEGER NOT NULL DEFAULT 0');
     db.exec('ALTER TABLE matriculas ADD COLUMN retorno_transferencia TEXT');
     marcarRetornos(db);
+  }
+  // Migração em lote: matrícula criada pela tela de migração do novo ano.
+  if (colunasMatriculas.length && !colunasMatriculas.includes('migracao_id')) {
+    db.exec('ALTER TABLE matriculas ADD COLUMN migracao_id INTEGER REFERENCES migracoes(id)');
   }
 
   // CPF de funcionário deixa de ser único (professores RET podem ter mais de um cadastro).

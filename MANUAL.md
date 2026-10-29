@@ -138,7 +138,7 @@ Aba **Devendo Histórico**: alunos que ficaram com um histórico em pendência (
 - **Diário:** escolha ano letivo e turma para ver os alunos em ordem alfabética com a situação (matriculado, transferido, deixou de frequentar, pós-censo, retorno). Daqui saem as ações de **transferir**, **deixou de frequentar** e **desfazer**, o botão **Gerar Ficha Matrícula** (Word) e a remoção do aluno da turma (devolve à lista de matrícula).
 - **Professor (alocação):** associe professores às turmas com **período (início e fim)**. O sistema **impede conflito de turno** para a mesma pessoa (CPF) e exige data de inativação para inativar um professor alocado. Exclusão da alocação: administrador.
 
-### 4.10 Ano letivo: Calendário, Fechar e Reabrir
+### 4.10 Ano letivo: Calendário, Fechar, Reabrir e Migrar
 
 - **Calendário do ano letivo:** exibe o PDF anexado pelo administrador (seção 4.13), na própria tela ou em nova aba.
 - **Fechar ano letivo:** escolha o ano e a turma, informe a **situação final** de todos os alunos e clique em **Fechar turma** — o fechamento é em lote e grava em tabela própria.
@@ -146,7 +146,12 @@ Aba **Devendo Histórico**: alunos que ficaram com um histórico em pendência (
   - *Educação Infantil (Grupos 1–3 e Pré 1–2):* Continuidade de estudos, Transferido, Deixou de frequentar.
   - Se faltar alguma situação, o sistema lista os alunos faltantes e **não fecha**. Turma fechada **congela as matrículas** (não deixa matricular, transferir nem remover).
 - **Reabrir ano letivo:** escolha a turma fechada e confirme na janela de confirmação — as situações já registradas ficam **preservadas** e liberadas para alteração; ao fechar de novo pela tela de Fechar, elas são atualizadas.
-- **Regra do próximo ano:** enquanto houver turma aberta ou aluno sem situação final no ano anterior, **o sistema não deixa criar turmas no ano seguinte** (avisa quais turmas/alunos faltam).
+- **Regra do próximo ano:** enquanto houver turma aberta ou aluno sem situação final no ano anterior, **o sistema não deixa criar turmas no ano seguinte** nem virar o período na Administração (avisa quais turmas/alunos faltam).
+- **Migrar alunos (novo ano letivo)** — *somente administrador*: depois de fechar o ano e cadastrar as turmas do novo ano, esta tela migra os alunos em lote:
+  1. Escolha a **turma de origem** (fechada, do ano anterior) — o sistema sugere automaticamente a **turma de destino** compatível (série seguinte + mesmo turno; alunos reprovados podem ser migrados para a turma da mesma série trocando o destino).
+  2. A lista mostra a **situação final** de cada aluno e marca com *já matriculado* quem já tem matrícula no novo ano (não vem pré-marcado ninguém — selecione os alunos e clique em **Migrar selecionados**).
+  3. A migração **cria as matrículas** na turma de destino com a data de início do ano novo; as matrículas antigas ficam **preservadas** como histórico.
+  4. Todo o lote fica registrado em **Migrações anteriores**, com botão **Desfazer** que remove apenas as matrículas criadas — se algum aluno já tiver sido movimentado no novo ano (transferido etc.), a operação é recusada e lista os nomes para correção manual.
 
 ### 4.11 Relatórios
 
@@ -163,7 +168,7 @@ Escolha um **modelo pronto** (Matrículas Pós-Censo, Quadro de Turmas, Mapa de 
 
 ### 4.13 Administração (somente administrador)
 
-- **Ano letivo:** datas de **início** e **término** e **Data Base CENSO** (padrão: última quarta-feira de maio do ano corrente). As datas entram como padrão na alocação de professores.
+- **Ano letivo:** datas de **início** e **término** e **Data Base CENSO** (padrão: última quarta-feira de maio do ano corrente). As datas entram como padrão na alocação de professores. Ao **virar o período para um ano novo**, vale a regra do próximo ano (seção 4.10): o ano anterior precisa estar fechado, com situação final registrada de todos os alunos — ajustes de datas dentro do mesmo ano seguem livres.
 - **Calendário (PDF):** anexar ou substituir o PDF do calendário escolar do ano.
 - **Dados da escola** (logo, nome, INEP): ficam no cabeçalho — seção 4.1.
 
@@ -192,6 +197,7 @@ Menu **Usuários** (somente administrador):
 | Cadastros (alunos, funcionários, turmas) | ✅ | ✅ |
 | Matrículas, Diário e alocação de professores | ✅ | ✅ |
 | Fechar / Reabrir ano letivo | ✅ | ✅ |
+| Migrar alunos para o novo ano | ✅ | ❌ |
 | Relatórios (prévia e PDF) | ✅ | ✅ |
 | Devendo histórico e documentos (.docx) | ✅ | ✅ |
 | Ano letivo e calendário (Administração) | ✅ | ❌ |
@@ -299,13 +305,13 @@ historico-escolar/
 │  ├─ db.js             # banco SQLite + criação das tabelas + migrações + seed
 │  ├─ routes/           # auth, pedidos, usuarios, escola, arquivos, ano-letivo,
 │  │                    # alunos, funcionarios, turmas, alocacoes, matriculas,
-│  │                    # diario, devendo, relatorios, encerramento, sobre
+│  │                    # diario, devendo, relatorios, encerramento, migracao, sobre
 │  ├─ services/         # relatorios, pdfRelatorio, fichaMatricula, declaracaoEscolar
 │  └─ utils/            # cpf, data, texto, senha, arquivos, csv, dependências
 ├─ public/              # interface (index.html, js/app.js, css/styles.css)
 ├─ tests/
-│  ├─ smoke.test.js     # testes de API (71)
-│  └─ e2e/              # testes de interface Playwright (31, um arquivo por módulo)
+│  ├─ smoke.test.js     # testes de API (72)
+│  └─ e2e/              # testes de interface Playwright (32, um arquivo por módulo)
 ├─ instalador/          # script do instalador + atalhos .vbs
 ├─ data/                # BANCO (não versionar)
 └─ pdfs/                # PDFs dos alunos (não versionar)
@@ -314,13 +320,13 @@ historico-escolar/
 ### 9.6 Testes
 
 ```bat
-node --test tests/smoke.test.js   # testes de API (71)
-npx playwright test               # testes de interface (31; usa a porta 3100)
+node --test tests/smoke.test.js   # testes de API (72)
+npx playwright test               # testes de interface (32; usa a porta 3100)
 ```
 
 - Na primeira vez, instalar o navegador dos testes: `npx playwright install chromium`.
 - `npm test` roda a descoberta padrão do Node (`node --test`).
-- Cobrem: login/permissões, pedidos e regra de datas, cadastros, CSV, matrículas e lote, diário, transferências/retornos, pós-censo, alocação de professores, documentos em Word (ficha e declaração), relatórios (prévia e PDF), **encerramento do ano letivo** e o rodapé **Sobre**.
+- Cobrem: login/permissões, pedidos e regra de datas, cadastros, CSV, matrículas e lote, diário, transferências/retornos, pós-censo, alocação de professores, documentos em Word (ficha e declaração), relatórios (prévia e PDF), **encerramento do ano letivo**, **migração em lote para o novo ano** e o rodapé **Sobre**.
 - Os testes de interface sobem o próprio servidor E2E em `localhost:3100` com banco temporário — deixe a porta 3100 livre.
 
 ---

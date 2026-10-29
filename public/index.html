@@ -54,6 +54,7 @@
       </button>
       <button type="button" class="aba" data-painel="fechar-ano">Fechar ano letivo</button>
       <button type="button" class="aba" data-painel="reabrir-ano">Reabrir ano letivo</button>
+      <button type="button" class="aba" data-painel="migracao" id="aba-migracao" hidden>Migrar alunos (novo ano)</button>
       <p class="menu-grupo">Histórico Escolar</p>
       <button type="button" class="aba" data-painel="confeccionar">
         A confeccionar <span class="badge ambar" id="badge-confeccionar">0</span>
@@ -371,6 +372,64 @@
           <button type="button" class="btn perigo" id="btn-reabrir-turma">Reabrir turma</button>
         </div>
       </div>
+    </section>
+
+    <section class="painel" id="painel-migracao" hidden>
+      <p class="secundario">
+        Migre os alunos da turma encerrada do ano anterior para a turma do novo ano letivo.
+        A migração cria as matrículas na turma de destino — as matrículas antigas ficam
+        preservadas no ano encerrado.
+      </p>
+      <div class="barra">
+        <label class="campo"><span>Turma de origem (ano anterior, fechada)</span>
+          <select id="migracao-origem"></select>
+        </label>
+        <label class="campo"><span>Turma de destino (novo ano)</span>
+          <select id="migracao-destino"></select>
+        </label>
+      </div>
+      <p class="secundario" id="migracao-sugestao" hidden></p>
+      <p class="vazio" id="migracao-vazio-selecao" hidden>
+        Selecione a turma de origem para ver os alunos disponíveis para a migração.
+      </p>
+      <div id="migracao-detalhes" hidden>
+        <h3 class="titulo-lista-matricula" id="migracao-turma-titulo"></h3>
+        <div class="tabela-rolagem">
+          <table>
+            <thead>
+              <tr>
+                <th aria-label="Selecionar"></th>
+                <th>Aluno</th>
+                <th>Situação final</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="corpo-migracao"></tbody>
+          </table>
+        </div>
+        <p class="vazio" id="migracao-vazio-alunos" hidden>Nenhum aluno nesta turma.</p>
+        <div class="barra">
+          <button type="button" class="btn primario" id="btn-migrar">Migrar selecionados</button>
+          <span class="secundario" id="migracao-status" style="margin:0"></span>
+        </div>
+      </div>
+      <h3 class="titulo-lista-matricula">Migrações anteriores</h3>
+      <div class="tabela-rolagem" id="migracao-historico-rolagem" hidden>
+        <table>
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Origem</th>
+              <th>Destino</th>
+              <th>Alunos</th>
+              <th>Situação</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="corpo-migracao-historico"></tbody>
+        </table>
+      </div>
+      <p class="vazio" id="migracao-vazio-historico" hidden>Nenhuma migração registrada até o momento.</p>
     </section>
 
     <section class="painel" id="painel-funcionarios" hidden>

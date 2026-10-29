@@ -39,6 +39,7 @@
     diario: { turmaId: null, dados: null },
     fecharAno: { ano: null, turmaId: null, dados: null },
     reabrirAno: { ano: null, turmaId: null, dados: null },
+    migracao: { origemId: null, destinoId: null, dados: null },
     relatorios: { catalogo: null, modelo: null },
   };
 
@@ -251,6 +252,7 @@
     $('#usuario-atual').innerHTML = `<b>${esc(estado.usuario.nome)}</b> · ${esc(rotuloPerfil(estado.usuario.perfil))}`;
     $('#aba-usuarios').hidden = estado.usuario.perfil !== 'admin';
     $('#aba-administracao').hidden = estado.usuario.perfil !== 'admin';
+    $('#aba-migracao').hidden = estado.usuario.perfil !== 'admin';
     $('#grupo-configuracoes').hidden = estado.usuario.perfil !== 'admin';
     abrirPainel('calendario');
     api('GET', '/api/pedidos/contagens').then(atualizarContadores).catch(() => {});
@@ -274,7 +276,7 @@
   function abrirPainel(nome) {
     estado.painel = nome;
     $$('.aba').forEach((a) => a.classList.toggle('ativa', a.dataset.painel === nome));
-    ['calendario', 'fechar-ano', 'reabrir-ano', 'confeccionar', 'prontos', 'entregues', 'devendo', 'alunos', 'matricula', 'diario', 'funcionarios', 'turmas', 'alocacoes', 'usuarios', 'administracao', 'relatorios'].forEach((p) => {
+    ['calendario', 'fechar-ano', 'reabrir-ano', 'migracao', 'confeccionar', 'prontos', 'entregues', 'devendo', 'alunos', 'matricula', 'diario', 'funcionarios', 'turmas', 'alocacoes', 'usuarios', 'administracao', 'relatorios'].forEach((p) => {
       $(`#painel-${p}`).hidden = p !== nome;
     });
     carregarPainel();
@@ -287,6 +289,7 @@
     if (estado.painel === 'diario') return carregarDiario();
     if (estado.painel === 'fechar-ano') return carregarFecharAno();
     if (estado.painel === 'reabrir-ano') return carregarReabrirAno();
+    if (estado.painel === 'migracao') return carregarMigracao();
     if (estado.painel === 'funcionarios') return carregarFuncionarios();
     if (estado.painel === 'turmas') return carregarTurmas();
     if (estado.painel === 'alocacoes') return carregarAlocacoes();
@@ -3607,6 +3610,184 @@
     );
   }
 
+  /* ---------------- migração do novo ano letivo ---------------- */
+
+  const ROTULO_SITUACAO_FINAL = {
+    aprovado: ['Aprovado', 'verde'],
+    reprovado: ['Reprovado', 'vermelho'],
+    reprovado_freq: ['Reprovado por frequência', 'vermelho'],
+    deixou_frequentar: ['Deixou de frequentar', 'ambar'],
+    transferido: ['Transferido', 'ambar'],
+    continuidade: ['Continuidade de estudos', 'azul'],
+  };
+
+  function pillSituacaoFinal(valor) {
+    const [rotulo, cor] = ROTULO_SITUACAO_FINAL[valor] || [valor, 'azul'];
+    return `<span class="pill ${cor}">${esc(rotulo)}</span>`;
+  }
+
+  function limparSelecaoMigracao() {
+    $('#migracao-destino').innerHTML = '<option value="">— Selecione a turma de origem —</option>';
+    $('#migracao-detalhes').hidden = true;
+    $('#migracao-vazio-selecao').hidden = false;
+    $('#migracao-sugestao').hidden = true;
+    atualizarBotaoMigrar();
+  }
+
+  function atualizarBotaoMigrar() {
+    $('#btn-migrar').disabled = !estado.migracao.destinoId;
+  }
+
+  function rotuloOpcaoTurma(t, extra) {
+    return `${esc(t.sigla)} — ${esc(t.ano_escolaridade)} · ${esc(t.turno)} (${t.ano_letivo})${extra || ''}`;
+  }
+
+  async function carregarMigracao() {
+    const select = $('#migracao-origem');
+    const origemId = estado.migracao.origemId;
+    try {
+      const dados = await api('GET', origemId ? `/api/migracao?origem_id=${origemId}` : '/api/migracao');
+      estado.migracao.dados = dados;
+      select.innerHTML = '<option value="">— Selecione a turma de origem —</option>' +
+        (dados.origens || []).map((t) =>
+          `<option value="${t.id}">${rotuloOpcaoTurma(t, ` · ${t.total_alunos} aluno(s)`)}</option>`
+        ).join('');
+      if (origemId && (dados.origens || []).some((t) => t.id === origemId)) {
+        select.value = String(origemId);
+        renderizarMigracaoAlunos(dados);
+      } else {
+        estado.migracao.origemId = null;
+        estado.migracao.destinoId = null;
+        limparSelecaoMigracao();
+      }
+      renderizarHistoricoMigracao(dados.migracoes || []);
+    } catch (e) {
+      estado.migracao.origemId = null;
+      estado.migracao.destinoId = null;
+      limparSelecaoMigracao();
+      if (e.status !== 401) notificar(e.message, 'erro');
+    }
+  }
+
+  function renderizarMigracaoAlunos(dados) {
+    const origem = dados.origem;
+    estado.migracao.origemId = origem.id;
+    $('#migracao-vazio-selecao').hidden = true;
+    $('#migracao-detalhes').hidden = false;
+    $('#migracao-turma-titulo').textContent =
+      `Turma ${origem.sigla} — ${origem.ano_escolaridade} · ${origem.matriz} · turno ${origem.turno} · ${origem.ano_letivo}`;
+
+    const destinos = dados.destinos || [];
+    const selectDestino = $('#migracao-destino');
+    selectDestino.innerHTML = '<option value="">— Selecione a turma de destino —</option>' +
+      destinos.map((t) => `<option value="${t.id}">${rotuloOpcaoTurma(t)}</option>`).join('');
+    const sugerido = Number(dados.destino_sugerido) || (destinos.length === 1 ? destinos[0].id : null);
+    if (sugerido && destinos.some((t) => t.id === sugerido)) selectDestino.value = String(sugerido);
+    estado.migracao.destinoId = Number(selectDestino.value) || null;
+
+    const dica = $('#migracao-sugestao');
+    if (destinos.length === 0) {
+      dica.innerHTML = '<b>Nenhuma turma do próximo ano cadastrada ainda.</b> ' +
+        'Cadastre as turmas do novo ano letivo na aba <b>Turmas</b> e volte aqui.';
+      dica.hidden = false;
+    } else if (dados.destino_sugerido) {
+      const t = destinos.find((x) => x.id === dados.destino_sugerido);
+      dica.innerHTML = `Sugestão automática: <b>${esc(t.sigla)}</b> (${esc(t.ano_escolaridade)} · ${esc(t.turno)}) ` +
+        '— série seguinte e mesmo turno. Alunos reprovados podem ser migrados para a turma da mesma série; ' +
+        'troque a turma de destino se necessário.';
+      dica.hidden = false;
+    } else {
+      dica.hidden = true;
+    }
+
+    const alunos = dados.alunos || [];
+    $('#corpo-migracao').innerHTML = alunos.map((a) => `
+      <tr>
+        <td><input type="checkbox" class="migrar-aluno" data-matricula="${a.matricula_id}"
+                   aria-label="Migrar ${esc(a.nome)}" ${a.ja_migrado ? 'disabled' : ''}></td>
+        <td>${esc(a.nome)}</td>
+        <td>${a.situacao ? pillSituacaoFinal(a.situacao) : '<span class="secundario">não registrada</span>'}</td>
+        <td>${a.ja_migrado ? '<span class="pill azul">já matriculado</span>' : ''}</td>
+      </tr>`).join('');
+    $('#migracao-vazio-alunos').hidden = alunos.length !== 0;
+    atualizarBotaoMigrar();
+  }
+
+  function renderizarHistoricoMigracao(migracoes) {
+    $('#migracao-historico-rolagem').hidden = migracoes.length === 0;
+    $('#migracao-vazio-historico').hidden = migracoes.length !== 0;
+    $('#corpo-migracao-historico').innerHTML = migracoes.map((m) => `
+      <tr>
+        <td>${esc(formatarDataHora(m.criado_em))}</td>
+        <td>${esc(m.origem_sigla)} (${m.origem_ano})</td>
+        <td>${esc(m.destino_sigla)} (${m.destino_ano})</td>
+        <td>${m.total}</td>
+        <td>${m.desfeita ? '<span class="pill ambar">Desfeita</span>' : '<span class="pill verde">Aplicada</span>'}</td>
+        <td>${m.desfeivel
+          ? `<button type="button" class="btn texto" data-migracao-desfazer="${m.id}">Desfazer</button>`
+          : ''}</td>
+      </tr>`).join('');
+  }
+
+  function prepararMigracao() {
+    const origemId = estado.migracao.origemId;
+    const destinoId = Number($('#migracao-destino').value) || null;
+    if (!origemId || !destinoId) {
+      notificar('Selecione as turmas de origem e destino.', 'erro');
+      return;
+    }
+    const matriculas = $$('#corpo-migracao .migrar-aluno')
+      .filter((c) => c.checked && !c.disabled)
+      .map((c) => Number(c.dataset.matricula));
+    if (matriculas.length === 0) {
+      notificar('Selecione ao menos um aluno para migrar.', 'erro');
+      return;
+    }
+    const dados = estado.migracao.dados || {};
+    const origem = (dados.origens || []).find((t) => t.id === origemId);
+    const destino = (dados.destinos || []).find((t) => t.id === destinoId);
+    abrirConfirmacaoExclusao(
+      {
+        rota: '/api/migracao',
+        metodo: 'POST',
+        corpo: { origem_id: origemId, destino_id: destinoId, matriculas },
+        titulo: 'Migrar alunos para o novo ano',
+        mensagem: `${matriculas.length} aluno(s) migrado(s) com sucesso.`,
+        rotulo: `Sim, migrar ${matriculas.length} aluno(s)`,
+        cabecalho: 'Os alunos selecionados receberão matrícula na turma de destino:',
+        avisosHtml: [
+          '<li>As matrículas do ano encerrado são preservadas como histórico.</li>',
+          '<li>Aluno que já tem matrícula no novo ano é ignorado automaticamente.</li>',
+        ],
+        aposConfirmar: () => carregarMigracao(),
+      },
+      `<b>${esc(origem ? origem.sigla : '')}</b> (${origem ? origem.ano_letivo : ''}) → ` +
+        `<b>${esc(destino ? destino.sigla : '')}</b> (${destino ? destino.ano_letivo : ''})` +
+        `<br>${matriculas.length} aluno(s) selecionado(s)`
+    );
+  }
+
+  function prepararDesfazerMigracao(id) {
+    const migracoes = (estado.migracao.dados || {}).migracoes || [];
+    const m = migracoes.find((x) => x.id === id);
+    if (!m || !m.desfeivel) return;
+    abrirConfirmacaoExclusao(
+      {
+        rota: `/api/migracao/${id}/desfazer`,
+        metodo: 'POST',
+        corpo: {},
+        titulo: 'Desfazer migração',
+        mensagem: `Migração desfeita: ${m.total} matrícula(s) removida(s) da turma ${m.destino_sigla}.`,
+        rotulo: 'Sim, desfazer a migração',
+        cabecalho: 'As matrículas criadas por esta migração serão removidas da turma de destino:',
+        avisosHtml: ['<li>Alunos já movimentados no novo ano (transferidos etc.) não são afetados — a operação é recusada se houver algum.</li>'],
+        aposConfirmar: () => carregarMigracao(),
+      },
+      `<b>${esc(m.origem_sigla)}</b> (${m.origem_ano}) → <b>${esc(m.destino_sigla)}</b> (${m.destino_ano})` +
+        `<br>${m.total} aluno(s) migrado(s) em ${esc(formatarDataHora(m.criado_em))}`
+    );
+  }
+
   async function baixarDocumento(rota, erroPadrao, sucesso) {
     try {
       const resposta = await fetch(rota, {
@@ -3962,6 +4143,32 @@
   });
   $('#reabrir-turma').addEventListener('change', carregarTurmaReabrir);
   $('#btn-reabrir-turma').addEventListener('click', prepararReabertura);
+
+  $('#migracao-origem').addEventListener('change', async () => {
+    const origemId = Number($('#migracao-origem').value) || null;
+    estado.migracao.origemId = origemId;
+    estado.migracao.destinoId = null;
+    if (!origemId) {
+      limparSelecaoMigracao();
+      return;
+    }
+    try {
+      const dados = await api('GET', `/api/migracao?origem_id=${origemId}`);
+      estado.migracao.dados = dados;
+      renderizarMigracaoAlunos(dados);
+    } catch (e) {
+      if (e.status !== 401) notificar(e.message, 'erro');
+    }
+  });
+  $('#migracao-destino').addEventListener('change', () => {
+    estado.migracao.destinoId = Number($('#migracao-destino').value) || null;
+    atualizarBotaoMigrar();
+  });
+  $('#btn-migrar').addEventListener('click', prepararMigracao);
+  document.addEventListener('click', (evento) => {
+    const botao = evento.target.closest('[data-migracao-desfazer]');
+    if (botao) prepararDesfazerMigracao(Number(botao.dataset.migracaoDesfazer));
+  });
 
   preencherCensoPadrao();
 
