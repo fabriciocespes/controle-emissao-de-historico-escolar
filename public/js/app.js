@@ -3855,8 +3855,7 @@
   function atualizarDescricaoRenovacao() {
     const ano = estado.renovacao.ano;
     $('#renovacao-descricao').textContent = ano
-      ? `Renovação de matrícula dos alunos para o Ano de ${ano + 1} `
-        + `(sendo que o “${ano + 1}” vai ser sempre o ano de referência + 1)`
+      ? `Renovação de matrícula dos alunos para o Ano de ${ano + 1}`
       : '';
   }
 

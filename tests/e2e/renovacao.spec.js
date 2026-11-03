@@ -113,9 +113,9 @@ test('renovar matrícula: busca, registro com data editável, desfazer e relató
   }
   await expect(page.locator('#renovacao-ano')).toHaveValue(String(ano - 1));
 
-  // Cabeçalho dinâmico: alvo = ano de referência + 1.
+  // Cabeçalho dinâmico: alvo = ano de referência + 1 (sem o parêntese explicativo).
   await expect(page.locator('#renovacao-descricao'))
-    .toContainText(`para o Ano de ${ano} (sendo que o “${ano}” vai ser sempre o ano de referência + 1)`);
+    .toHaveText(`Renovação de matrícula dos alunos para o Ano de ${ano}`);
 
   // Os dois alunos aparecem como pendentes (sem renovação).
   await expect(page.locator('#corpo-renovacao tr')).toHaveCount(2);
