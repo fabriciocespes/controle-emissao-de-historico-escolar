@@ -119,10 +119,21 @@ function rotasMigracao({ db }) {
     return new Set(linhas.map((l) => l.aluno_id));
   }
 
+  function renovadosDoAno(ano) {
+    if (!ano) return new Set();
+    const linhas = db.prepare('SELECT aluno_id FROM renovacoes WHERE ano_letivo = ?').all(ano);
+    return new Set(linhas.map((l) => l.aluno_id));
+  }
+
   function montarAlunos(origem) {
     const alunos = alunosDaTurma(db, origem.id);
     const jaMigrados = conjuntoJaMigrados(alunos, origem);
-    return alunos.map((a) => ({ ...a, ja_migrado: jaMigrados.has(a.aluno_id) }));
+    const renovados = renovadosDoAno(origem.ano_letivo);
+    return alunos.map((a) => ({
+      ...a,
+      ja_migrado: jaMigrados.has(a.aluno_id),
+      renovado: renovados.has(a.aluno_id),
+    }));
   }
 
   // Lista das turmas de origem (fechadas); com origem_id, devolve também os
@@ -217,6 +228,20 @@ function rotasMigracao({ db }) {
       const e = erro(400, 'Nenhum aluno pôde ser migrado.', { matriculas: 'Revise a seleção.' });
       e.avisos = avisos;
       throw e;
+    }
+
+    // Aviso (nunca bloqueia): alunos sem renovação seguem na migração —
+    // a cobrança é feita pelo relatório "Renovação de matrícula".
+    const renovados = renovadosDoAno(origem.ano_letivo);
+    const semRenovacao = paraMigrar.filter((a) => !renovados.has(a.aluno_id));
+    if (semRenovacao.length > 0) {
+      const nomes = semRenovacao.slice(0, 5).map((a) => a.nome).join(', ');
+      const resto = semRenovacao.length > 5 ? ` e mais ${semRenovacao.length - 5}` : '';
+      avisos.push(
+        `${semRenovacao.length} aluno(s) sem renovação de matrícula para ${origem.ano_letivo} ` +
+        `(${nomes}${resto}) — a migração segue mesmo assim; acompanhe os pendentes no ` +
+        'relatório "Renovação de matrícula".'
+      );
     }
 
     const instante = agora();

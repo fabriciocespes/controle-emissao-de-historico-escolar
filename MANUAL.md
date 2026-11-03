@@ -139,7 +139,7 @@ Aba **Devendo Histórico**: alunos que ficaram com um histórico em pendência (
 - **Diário:** escolha ano letivo e turma para ver os alunos em ordem alfabética com a situação (matriculado, transferido, deixou de frequentar, pós-censo, retorno). Daqui saem as ações de **transferir**, **deixou de frequentar** e **desfazer**, o botão **Gerar Ficha Matrícula** (Word) e a remoção do aluno da turma (devolve à lista de matrícula).
 - **Professor (alocação):** associe professores às turmas com **período (início e fim)**. O sistema **impede conflito de turno** para a mesma pessoa (CPF) e exige data de inativação para inativar um professor alocado. Exclusão da alocação: administrador.
 
-### 4.10 Ano letivo: Calendário, Fechar, Reabrir e Migrar
+### 4.10 Ano letivo: Calendário, Fechar, Reabrir, Migrar e Renovar
 
 - **Calendário do ano letivo:** exibe o PDF anexado pelo administrador (seção 4.13), na própria tela ou em nova aba.
 - **Fechar ano letivo:** escolha o ano e a turma, informe a **situação final** de todos os alunos e clique em **Fechar turma** — o fechamento é em lote e grava em tabela própria.
@@ -153,10 +153,18 @@ Aba **Devendo Histórico**: alunos que ficaram com um histórico em pendência (
   2. A lista mostra a **situação final** de cada aluno e marca com *já matriculado* quem já tem matrícula no novo ano (não vem pré-marcado ninguém — selecione os alunos e clique em **Migrar selecionados**).
   3. A migração **cria as matrículas** na turma de destino com a data de início do ano novo; as matrículas antigas ficam **preservadas** como histórico.
   4. Todo o lote fica registrado em **Migrações anteriores**, com botão **Desfazer** que remove apenas as matrículas criadas — se algum aluno já tiver sido movimentado no novo ano (transferido etc.), a operação é recusada e lista os nomes para correção manual.
+  5. A coluna **Renovação** mostra quem já renovou a matrícula (seção 4.10.1) e a janela de confirmação avisa quantos alunos do lote estão **sem renovação** — a migração segue mesmo assim (aviso, nunca bloqueio).
+- **Renovar matrícula** *(4.10.1)* — admin e operador: registre o comparecimento dos pais/responsáveis à unidade escolar próximo ao fim do ano letivo.
+  1. Escolha o **ano letivo de referência** (o ano em que os alunos estudam — é ele que aparece no relatório de pendências) e **busque o aluno por nome ou CPF**.
+  2. Clique em **Registrar renovação** na linha do aluno: a janela já vem com a **data de hoje**, que você pode editar antes de confirmar (é a data do atendimento).
+  3. A linha passa a exibir **Renovado em dd/mm/aaaa**, com botão **Desfazer**; o contador no topo mostra quantos renovaram e quantos ainda faltam.
+  4. **Nunca bloqueia:** quem não renovou aparece apenas como aviso ao alocar/matricular no próximo ano e como pendência no relatório (seção 4.11). Alunos **transferidos** ficam fora da tela e do relatório (não renovam para esta escola).
 
 ### 4.11 Relatórios
 
-Escolha um **modelo pronto** (Matrículas Pós-Censo, Quadro de Turmas, Mapa de Alunos…) ou monte do zero: **fonte de dados**, **campos**, **filtros**, **agrupar por** e **ordenar**.
+Escolha um **modelo pronto** (Matrículas Pós-Censo, Quadro de Turmas, Mapa de Alunos, **Renovação de Matrícula**…) ou monte do zero: **fonte de dados**, **campos**, **filtros**, **agrupar por** e **ordenar**.
+
+- O modelo **Renovação de Matrícula** lista os alunos do ano de referência com *Renovou* (Sim/Não) e *Data da renovação*; o filtro **Renovou = Não** deixa em mãos a lista de quem ainda falta cobrar (seção 4.10.1).
 
 - **Gerar prévia** mostra até 100 linhas na tela (com linhas de grupo e totais quando o campo soma) e avisa se o relatório é maior.
 - **Baixar PDF** gera o relatório completo (até 5000 linhas), com rodapé numerado.
@@ -199,6 +207,7 @@ Menu **Usuários** (somente administrador):
 | Matrículas, Diário e alocação de professores | ✅ | ✅ |
 | Fechar / Reabrir ano letivo | ✅ | ✅ |
 | Migrar alunos para o novo ano | ✅ | ❌ |
+| Renovar matrícula | ✅ | ✅ |
 | Relatórios (prévia e PDF) | ✅ | ✅ |
 | Devendo histórico e documentos (.docx) | ✅ | ✅ |
 | Ano letivo e calendário (Administração) | ✅ | ❌ |

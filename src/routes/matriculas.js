@@ -114,6 +114,31 @@ function rotasMatriculas({ db }) {
     const posCenso = ehPosCenso(dataInicio, dataBaseCenso(db)) ? 1 : 0;
     const retornoData = ehRetorno(db, alunoId, dataInicio, null);
 
+    // Aviso (nunca bloqueia): aluno que estudou no ano anterior sem
+    // renovação registrada — a cobrança é feita pelo relatório.
+    const avisos = [];
+    const anoAnterior = turma.ano_letivo - 1;
+    if (anoAnterior >= 2000) {
+      const estudouAnoAnterior = db
+        .prepare(
+          `SELECT 1 FROM matriculas m
+             JOIN turmas t ON t.id = m.turma_id
+            WHERE m.aluno_id = ? AND t.ano_letivo = ?
+              AND m.status NOT LIKE 'transferido%'
+            LIMIT 1`
+        )
+        .get(alunoId, anoAnterior);
+      const renovou = db
+        .prepare('SELECT 1 FROM renovacoes WHERE aluno_id = ? AND ano_letivo = ? LIMIT 1')
+        .get(alunoId, anoAnterior);
+      if (estudouAnoAnterior && !renovou) {
+        avisos.push(
+          `Aluno sem renovação de matrícula para ${turma.ano_letivo}. ` +
+          'Registre o atendimento na tela "Renovar matrícula".'
+        );
+      }
+    }
+
     const resultado = db
       .prepare(
         `INSERT INTO matriculas (aluno_id, turma_id, matricula, data_matricula,
@@ -127,7 +152,7 @@ function rotasMatriculas({ db }) {
         requisicao.usuario.id, instante, instante);
 
     const linha = db.prepare('SELECT * FROM matriculas WHERE id = ?').get(Number(resultado.lastInsertRowid));
-    return resposta.status(201).json(formatarMatricula(linha));
+    return resposta.status(201).json({ ...formatarMatricula(linha), avisos });
   });
 
   const TIPOS_TRANSFERENCIA = ['transferido_intercampus', 'transferido_externo'];

@@ -307,6 +307,51 @@ const FONTES = {
     },
     agrupaveis: {},
   },
+
+  // Cobrança da renovação: alunos com matrícula no ano de referência
+  // (transferidos ficam de fora) e se a renovação daquele ano foi registrada.
+  renovacoes: {
+    rotulo: 'Renovação de matrícula',
+    sql: `
+      SELECT a.nome AS aluno_nome, a.nome_norm, a.cpf,
+             a.responsavel_nome, a.responsavel_telefone,
+             t.sigla AS turma_sigla, t.matriz, t.ano_escolaridade,
+             t.turno, t.ano_letivo, m.status,
+             r.data AS renovacao_data,
+             CASE WHEN r.id IS NULL THEN 0 ELSE 1 END AS renovou
+        FROM alunos a
+        JOIN matriculas m ON m.aluno_id = a.id AND m.status NOT LIKE 'transferido%'
+        JOIN turmas t ON t.id = m.turma_id
+        LEFT JOIN renovacoes r ON r.aluno_id = a.id AND r.ano_letivo = t.ano_letivo`,
+    orderByPadrao: 'a.nome ASC',
+    campos: {
+      aluno_nome: { rotulo: 'Nome do aluno', col: 'aluno_nome', ordenar: 'a.nome', formato: 'texto' },
+      cpf: { rotulo: 'CPF', col: 'cpf', ordenar: 'a.cpf', formato: 'texto' },
+      responsavel_nome: { rotulo: 'Responsável', col: 'responsavel_nome', ordenar: 'a.responsavel_nome', formato: 'texto' },
+      responsavel_telefone: { rotulo: 'Telefone do responsável', col: 'responsavel_telefone', ordenar: 'a.responsavel_telefone', formato: 'texto' },
+      turma: { rotulo: 'Turma', col: 'turma_sigla', ordenar: 't.sigla', formato: 'texto' },
+      matriz: { rotulo: 'Matriz', col: 'matriz', ordenar: 't.matriz', formato: 'texto' },
+      ano_escolaridade: { rotulo: 'Ano de escolaridade', col: 'ano_escolaridade', ordenar: 't.ano_escolaridade', formato: 'texto' },
+      turno: { rotulo: 'Turno', col: 'turno', ordenar: 't.turno', formato: 'texto' },
+      ano_letivo: { rotulo: 'Ano letivo', col: 'ano_letivo', ordenar: 't.ano_letivo', formato: 'numero' },
+      status: { rotulo: 'Status da matrícula', col: 'status', ordenar: 'm.status', formato: 'status_matricula' },
+      renovou: { rotulo: 'Renovou', col: 'renovou', ordenar: 'renovou', formato: 'simnao' },
+      renovacao_data: { rotulo: 'Data da renovação', col: 'renovacao_data', ordenar: 'r.data', formato: 'data' },
+    },
+    filtros: {
+      busca: { tipo: 'texto', sql: 'a.nome_norm LIKE ?', param: (v) => `%${normalizar(v)}%` },
+      ano_letivo: { tipo: 'inteiro', sql: 't.ano_letivo = ?' },
+      turma_id: { tipo: 'inteiro', sql: 't.id = ?' },
+      status: { tipo: 'texto', sql: 'm.status = ?' },
+      renovou: { tipo: 'booleano', sql: '(CASE WHEN r.id IS NULL THEN 0 ELSE 1 END) = ?' },
+    },
+    agrupaveis: {
+      turma: { col: 'turma_sigla', ordenar: 't.sigla' },
+      status: { col: 'status', ordenar: 'm.status', formato: 'status_matricula' },
+      renovou: { col: 'renovou', ordenar: 'renovou', formato: 'simnao' },
+      ano_letivo: { col: 'ano_letivo', ordenar: 't.ano_letivo' },
+    },
+  },
 };
 
 // ------------------------------- validação -------------------------------
@@ -568,6 +613,16 @@ const MODELOS = [
       filtros: {}, agrupar: null, ordenar: null,
     },
   },
+  {
+    id: 'renovacao_matricula',
+    rotulo: 'Renovação de Matrícula',
+    descricao: 'Quem renovou e quem falta cobrar no ano letivo — filtre pelo ano antes de gerar.',
+    config: {
+      fonte: 'renovacoes',
+      campos: ['aluno_nome', 'cpf', 'turma', 'ano_letivo', 'status', 'renovou', 'renovacao_data', 'responsavel_nome', 'responsavel_telefone'],
+      filtros: {}, agrupar: 'renovou', ordenar: null,
+    },
+  },
 ];
 
 const ROTULOS_FILTRO = {
@@ -578,6 +633,7 @@ const ROTULOS_FILTRO = {
   retorno: 'Retorno', data_inicio_de: 'Início a partir de', data_inicio_ate: 'Início até',
   data_fim_de: 'Fim a partir de', data_fim_ate: 'Fim até', via: 'Via',
   data_pedido_de: 'Pedido a partir de', data_pedido_ate: 'Pedido até',
+  renovou: 'Renovou',
 };
 
 function catalogo() {

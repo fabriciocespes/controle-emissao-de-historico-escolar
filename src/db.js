@@ -323,6 +323,24 @@ CREATE TABLE IF NOT EXISTS migracoes (
 CREATE INDEX IF NOT EXISTS idx_migracoes_origem ON migracoes(turma_origem_id);
 CREATE INDEX IF NOT EXISTS idx_migracoes_destino ON migracoes(turma_destino_id);
 
+-- Renovação de matrícula: pais/responsáveis confirmam a continuidade do
+-- aluno próximo ao fim do ano letivo. O campo ano_letivo é o ANO DE
+-- REFERÊNCIA (o ano em que a renovação é colhida — os alunos desse ano
+-- seguem para o seguinte). Uma linha por aluno e ano; a data é a do
+-- atendimento.
+CREATE TABLE IF NOT EXISTS renovacoes (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  aluno_id      INTEGER NOT NULL REFERENCES alunos(id) ON DELETE CASCADE,
+  ano_letivo    INTEGER NOT NULL,
+  data          TEXT NOT NULL,
+  criado_por    INTEGER REFERENCES usuarios(id),
+  criado_em     TEXT NOT NULL,
+  atualizado_em TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_renovacoes_aluno_ano ON renovacoes(aluno_id, ano_letivo);
+CREATE INDEX IF NOT EXISTS idx_renovacoes_ano ON renovacoes(ano_letivo);
+
 CREATE TABLE IF NOT EXISTS relatorio_perfis (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   usuario_id    INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,

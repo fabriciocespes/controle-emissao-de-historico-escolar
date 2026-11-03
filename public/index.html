@@ -55,6 +55,7 @@
       <button type="button" class="aba" data-painel="fechar-ano">Fechar ano letivo</button>
       <button type="button" class="aba" data-painel="reabrir-ano">Reabrir ano letivo</button>
       <button type="button" class="aba" data-painel="migracao" id="aba-migracao" hidden>Migrar alunos (novo ano)</button>
+      <button type="button" class="aba" data-painel="renovacao">Renovar matrícula</button>
       <p class="menu-grupo">Histórico Escolar</p>
       <button type="button" class="aba" data-painel="confeccionar">
         A confeccionar <span class="badge ambar" id="badge-confeccionar">0</span>
@@ -401,6 +402,7 @@
                 <th aria-label="Selecionar"></th>
                 <th>Aluno</th>
                 <th>Situação final</th>
+                <th>Renovação</th>
                 <th></th>
               </tr>
             </thead>
@@ -430,6 +432,38 @@
         </table>
       </div>
       <p class="vazio" id="migracao-vazio-historico" hidden>Nenhuma migração registrada até o momento.</p>
+    </section>
+
+    <section class="painel" id="painel-renovacao" hidden>
+      <p class="secundario">
+        Registre o comparecimento dos pais/responsáveis à unidade escolar para renovar a
+        matrícula próximo ao fim do ano letivo. A renovação nunca bloqueia a alocação —
+        quem não renovou aparece como pendente no relatório "Renovação de Matrícula".
+      </p>
+      <div class="barra">
+        <label class="campo"><span>Ano letivo de referência</span>
+          <select id="renovacao-ano"></select>
+        </label>
+        <input class="busca" id="busca-renovacao" type="search"
+               placeholder="Buscar por nome ou CPF do aluno">
+      </div>
+      <p class="secundario" id="renovacao-status" hidden></p>
+      <div class="tabela-rolagem">
+        <table>
+          <thead>
+            <tr>
+              <th>Aluno</th>
+              <th>CPF</th>
+              <th>Turma</th>
+              <th>Situação</th>
+              <th>Renovação</th>
+              <th class="acao">Ação</th>
+            </tr>
+          </thead>
+          <tbody id="corpo-renovacao"></tbody>
+        </table>
+      </div>
+      <p class="vazio" id="renovacao-vazio">Selecione o ano letivo de referência.</p>
     </section>
 
     <section class="painel" id="painel-funcionarios" hidden>

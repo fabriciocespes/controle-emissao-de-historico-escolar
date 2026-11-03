@@ -3888,6 +3888,13 @@ test('migração do novo ano: lote turma fechada → turma nova, sugestão, já 
     });
     assert.equal(fechada.status, 200, JSON.stringify(fechada.json));
 
+    // Um dos alunos renova a matrícula; os outros dois ficam pendentes.
+    const renovado = await admin.enviar('POST', '/api/renovacoes', {
+      aluno_id: alunos[0], ano_letivo: ano - 1, data: `${ano - 1}-11-20`,
+    });
+    assert.equal(renovado.status, 201, JSON.stringify(renovado.json));
+    assert.equal(renovado.json.atualizado, false);
+
     const destino = await admin.enviar('POST', '/api/turmas', turmaCadastro({
       sigla: 'MIG-6A', matriz: 'Ensino Fundamental (Anos Finais)',
       ano_escolaridade: '6º ano', tipo_turma: 'NAF',
@@ -3916,6 +3923,8 @@ test('migração do novo ano: lote turma fechada → turma nova, sugestão, já 
     assert.equal(detalhe.status, 200, JSON.stringify(detalhe.json));
     assert.equal(detalhe.json.alunos.length, 3);
     assert.ok(detalhe.json.alunos.every((a) => !a.ja_migrado), 'ninguém migrado ainda');
+    assert.equal(detalhe.json.alunos.filter((a) => a.renovado).length, 1, 'só o aluno renovado consta como renovado');
+    assert.ok(detalhe.json.alunos.find((a) => a.aluno_id === alunos[0]).renovado);
     assert.equal(detalhe.json.destino_sugerido, destinoId, 'sugestão = série seguinte + mesmo turno');
     assert.deepEqual(
       detalhe.json.alunos.map((a) => a.situacao).sort(),
@@ -3933,7 +3942,10 @@ test('migração do novo ano: lote turma fechada → turma nova, sugestão, já 
     });
     assert.equal(migrar.status, 201, JSON.stringify(migrar.json));
     assert.equal(migrar.json.total, 2);
-    assert.ok(!migrar.json.avisos.length, JSON.stringify(migrar.json.avisos));
+    // Só o aluno sem renovação gera aviso (o renovado está coberto).
+    assert.equal(migrar.json.avisos.length, 1, JSON.stringify(migrar.json.avisos));
+    assert.match(migrar.json.avisos[0], /1 aluno\(s\) sem renovação/);
+    assert.match(migrar.json.avisos[0], /Aluno Migração 2/);
     migracaoId = migrar.json.migracao.id;
 
     const noDestino = await admin.enviar('GET', `/api/matriculas?turma_id=${destinoId}`);
@@ -4012,6 +4024,190 @@ test('migração do novo ano: lote turma fechada → turma nova, sugestão, já 
     const excluidaOrigem = await admin.enviar('DELETE', `/api/turmas/${origem.json.id}`, { confirmar: true });
     assert.equal(excluidaOrigem.status, 200, JSON.stringify(excluidaOrigem.json));
     for (const alunoId of alunos) {
+      const excluido = await admin.enviar('DELETE', `/api/alunos/${alunoId}`, { confirmar: true });
+      assert.equal(excluido.status, 200, JSON.stringify(excluido.json));
+    }
+  }
+});
+
+test('renovação de matrícula: busca, registro, aviso na matrícula, relatório e desfazer', async () => {
+  const admin = new Cliente(base);
+  await admin.login('admin', 'admin123');
+  const ano = new Date().getFullYear();
+
+  // Ano anterior com três alunos: A e B seguem (um renova, outro não);
+  // C é transferido e fica fora da tela e do relatório.
+  const turmaAnterior = await admin.enviar('POST', '/api/turmas', turmaCadastro({
+    ano_letivo: ano - 1, sigla: 'REN-ANT', ano_escolaridade: '4º ano',
+  }));
+  assert.equal(turmaAnterior.status, 201, JSON.stringify(turmaAnterior.json));
+
+  const ids = [];
+  const cpfs = [];
+  const matriculasAnteriores = [];
+  let turmaAtualId = null;
+  try {
+    for (const [i, nome] of ['Renovacao Smoke A', 'Renovacao Smoke B', 'Renovacao Smoke C'].entries()) {
+      const cpf = cpfNovo(`96000000${i}`);
+      const aluno = await admin.enviar('POST', '/api/alunos', alunoCadastro({
+        nome, cpf, filiacao1_cpf: '',
+      }));
+      assert.equal(aluno.status, 201, JSON.stringify(aluno.json));
+      ids.push(aluno.json.id);
+      cpfs.push(cpf);
+
+      const m = await admin.enviar('POST', '/api/matriculas', {
+        aluno_id: aluno.json.id, turma_id: turmaAnterior.json.id, data_inicio: `${ano - 1}-02-10`,
+      });
+      assert.equal(m.status, 201, JSON.stringify(m.json));
+      matriculasAnteriores.push(m.json.id);
+    }
+
+    const transferido = await admin.enviar('POST', `/api/matriculas/${matriculasAnteriores[2]}/transferir`, {
+      tipo: 'transferido_externo', data: `${ano - 1}-06-01`, destino: 'Rede Municipal', motivo: '',
+    });
+    assert.equal(transferido.status, 200, JSON.stringify(transferido.json));
+
+    const consulta = await admin.enviar('GET', `/api/encerramento?turma_id=${turmaAnterior.json.id}`);
+    assert.equal(consulta.status, 200, JSON.stringify(consulta.json));
+    const situacoes = {};
+    for (const a of consulta.json.alunos) {
+      situacoes[a.matricula_id] = a.situacao || 'aprovado';
+    }
+    situacoes[matriculasAnteriores[2]] = 'transferido';
+    const fechada = await admin.enviar('POST', '/api/encerramento/fechar', {
+      turma_id: turmaAnterior.json.id, situacoes,
+    });
+    assert.equal(fechada.status, 200, JSON.stringify(fechada.json));
+
+    // A e B renovam para o ano anterior; C (transferido) é recusado.
+    const renovouA = await admin.enviar('POST', '/api/renovacoes', {
+      aluno_id: ids[0], ano_letivo: ano - 1, data: `${ano - 1}-11-15`,
+    });
+    assert.equal(renovouA.status, 201, JSON.stringify(renovouA.json));
+    assert.equal(renovouA.json.atualizado, false);
+
+    const renovouDeNovo = await admin.enviar('POST', '/api/renovacoes', {
+      aluno_id: ids[0], ano_letivo: ano - 1, data: `${ano - 1}-11-20`,
+    });
+    assert.equal(renovouDeNovo.status, 201, JSON.stringify(renovouDeNovo.json));
+    assert.equal(renovouDeNovo.json.atualizado, true, 'segundo registro é upsert');
+    assert.equal(renovouDeNovo.json.renovacao.data, `${ano - 1}-11-20`);
+
+    const renovouC = await admin.enviar('POST', '/api/renovacoes', {
+      aluno_id: ids[2], ano_letivo: ano - 1, data: `${ano - 1}-11-15`,
+    });
+    assert.equal(renovouC.status, 409);
+    assert.match(renovouC.json.erro, /não possui matrícula/);
+
+    const semCampos = await admin.enviar('POST', '/api/renovacoes', {});
+    assert.equal(semCampos.status, 400);
+    for (const campo of ['aluno_id', 'ano_letivo', 'data']) {
+      assert.ok(semCampos.json.campos[campo], `esperava erro no campo ${campo}`);
+    }
+
+    // Busca: sem ano é recusada; por nome (sem acento) e por CPF acham certo.
+    const semAno = await admin.enviar('GET', '/api/renovacoes');
+    assert.equal(semAno.status, 400);
+
+    const porNome = await admin.enviar('GET', `/api/renovacoes?ano_letivo=${ano - 1}&q=renovacao smoke`);
+    assert.equal(porNome.status, 200, JSON.stringify(porNome.json));
+    assert.deepEqual(porNome.json.itens.map((i) => i.nome).sort(),
+      ['Renovacao Smoke A', 'Renovacao Smoke B'], 'transferido fica fora da lista');
+
+    const porCpf = await admin.enviar('GET', `/api/renovacoes?ano_letivo=${ano - 1}&q=${cpfs[1]}`);
+    assert.equal(porCpf.json.itens.length, 1);
+    assert.equal(porCpf.json.itens[0].nome, 'Renovacao Smoke B');
+    assert.equal(porCpf.json.itens[0].cpf, cpfs[1], 'CPF devolvido mascarado');
+    assert.equal(porCpf.json.itens[0].renovado, false);
+    assert.equal(porNome.json.itens.find((i) => i.nome === 'Renovacao Smoke A').renovado, true);
+    assert.equal(porNome.json.itens.find((i) => i.nome === 'Renovacao Smoke A').renovacao_data,
+      `${ano - 1}-11-20`);
+
+    // Turma do novo ano: matricular B SEM renovação avisa; com renovação (A) não avisa.
+    const turmaAtual = await admin.enviar('POST', '/api/turmas', turmaCadastro({
+      sigla: 'REN-ATU', ano_escolaridade: '5º ano',
+    }));
+    assert.equal(turmaAtual.status, 201, JSON.stringify(turmaAtual.json));
+    turmaAtualId = turmaAtual.json.id;
+
+    const matriculaB = await admin.enviar('POST', '/api/matriculas', {
+      aluno_id: ids[1], turma_id: turmaAtualId, data_inicio: `${ano}-02-10`,
+    });
+    assert.equal(matriculaB.status, 201, JSON.stringify(matriculaB.json));
+    assert.equal(matriculaB.json.avisos.length, 1, JSON.stringify(matriculaB.json.avisos));
+    assert.match(matriculaB.json.avisos[0], /sem renovação de matrícula/);
+
+    const matriculaA = await admin.enviar('POST', '/api/matriculas', {
+      aluno_id: ids[0], turma_id: turmaAtualId, data_inicio: `${ano}-02-10`,
+    });
+    assert.equal(matriculaA.status, 201, JSON.stringify(matriculaA.json));
+    assert.deepEqual(matriculaA.json.avisos, [], 'aluno renovado não gera aviso');
+
+    // Relatório: quem renovou / quem falta cobrar no ano novo.
+    const catalogo = await admin.enviar('GET', '/api/relatorios/catalogo');
+    assert.ok(catalogo.json.fontes.some((f) => f.id === 'renovacoes'));
+    assert.ok(catalogo.json.modelos.some((m) => m.id === 'renovacao_matricula'));
+
+    const prev = await admin.enviar('POST', '/api/relatorios/preview', {
+      config: {
+        fonte: 'renovacoes',
+        campos: ['aluno_nome', 'renovou', 'renovacao_data'],
+        filtros: { ano_letivo: ano - 1, busca: 'Renovacao Smoke' },
+        agrupar: null, ordenar: null,
+      },
+    });
+    assert.equal(prev.status, 200, JSON.stringify(prev.json));
+    const linhas = prev.json.linhas.filter((l) => l.tipo === 'linha');
+    assert.equal(linhas.length, 2, JSON.stringify(linhas));
+    const linhaA = linhas.find((l) => l.celulas[0] === 'Renovacao Smoke A');
+    const linhaB = linhas.find((l) => l.celulas[0] === 'Renovacao Smoke B');
+    assert.equal(linhaA.celulas[1], 'Sim');
+    assert.equal(linhaB.celulas[1], 'Não');
+    assert.equal(linhaB.celulas[2], '—');
+    assert.ok(!linhas.some((l) => l.celulas[0] === 'Renovacao Smoke C'), 'transferido fora do relatório');
+
+    const pendentes = await admin.enviar('POST', '/api/relatorios/preview', {
+      config: {
+        fonte: 'renovacoes',
+        campos: ['aluno_nome'],
+        filtros: { ano_letivo: ano - 1, busca: 'Renovacao Smoke', renovou: false },
+        agrupar: null, ordenar: null,
+      },
+    });
+    assert.equal(pendentes.status, 200, JSON.stringify(pendentes.json));
+    assert.deepEqual(pendentes.json.linhas.filter((l) => l.tipo === 'linha').map((l) => l.celulas[0]),
+      ['Renovacao Smoke B'], 'filtro "não renovou" serve para cobrança');
+
+    // Operador também registra e consulta (sem exigirPerfil).
+    const criada = await admin.enviar('POST', '/api/usuarios', {
+      nome: 'Operadora Renovacao', login: 'oprenovacao', senha: 'segura123',
+      senha_confirmacao: 'segura123', perfil: 'operador',
+    });
+    assert.equal(criada.status, 201, JSON.stringify(criada.json));
+    const operadora = new Cliente(base);
+    await operadora.login('oprenovacao', 'segura123');
+    const consultaOp = await operadora.enviar('GET', `/api/renovacoes?ano_letivo=${ano - 1}`);
+    assert.equal(consultaOp.status, 200, JSON.stringify(consultaOp.json));
+    const registroOp = await operadora.enviar('POST', '/api/renovacoes', {
+      aluno_id: ids[1], ano_letivo: ano - 1, data: `${ano - 1}-12-01`,
+    });
+    assert.equal(registroOp.status, 201, JSON.stringify(registroOp.json));
+
+    // Desfazer: remove a linha; repetir é 404.
+    const desfazer = await operadora.enviar('DELETE', `/api/renovacoes/${ids[1]}?ano_letivo=${ano - 1}`);
+    assert.equal(desfazer.status, 200, JSON.stringify(desfazer.json));
+    assert.equal(desfazer.json.removida, true);
+    const desfazerDeNovo = await operadora.enviar('DELETE', `/api/renovacoes/${ids[1]}?ano_letivo=${ano - 1}`);
+    assert.equal(desfazerDeNovo.status, 404);
+  } finally {
+    if (turmaAtualId) {
+      const excluida = await admin.enviar('DELETE', `/api/turmas/${turmaAtualId}`, { confirmar: true });
+      assert.equal(excluida.status, 200, JSON.stringify(excluida.json));
+    }
+    const excluidaAnterior = await admin.enviar('DELETE', `/api/turmas/${turmaAnterior.json.id}`, { confirmar: true });
+    assert.equal(excluidaAnterior.status, 200, JSON.stringify(excluidaAnterior.json));
+    for (const alunoId of ids) {
       const excluido = await admin.enviar('DELETE', `/api/alunos/${alunoId}`, { confirmar: true });
       assert.equal(excluido.status, 200, JSON.stringify(excluido.json));
     }

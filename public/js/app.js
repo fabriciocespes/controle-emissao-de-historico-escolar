@@ -24,7 +24,7 @@
     usuario: null,
     csrf: null,
     painel: 'calendario',
-    buscas: { confeccionar: '', prontos: '', entregues: '', devendo: '', usuarios: '', alunos: '', funcionarios: '', turmas: '', alocacoes: '' },
+    buscas: { confeccionar: '', prontos: '', entregues: '', devendo: '', usuarios: '', alunos: '', funcionarios: '', turmas: '', alocacoes: '', renovacao: '' },
     pedido: null,
     pedidoEdicao: null,
     usuarioEdicao: null,
@@ -40,6 +40,7 @@
     fecharAno: { ano: null, turmaId: null, dados: null },
     reabrirAno: { ano: null, turmaId: null, dados: null },
     migracao: { origemId: null, destinoId: null, dados: null },
+    renovacao: { ano: null, itens: [] },
     relatorios: { catalogo: null, modelo: null },
   };
 
@@ -276,7 +277,7 @@
   function abrirPainel(nome) {
     estado.painel = nome;
     $$('.aba').forEach((a) => a.classList.toggle('ativa', a.dataset.painel === nome));
-    ['calendario', 'fechar-ano', 'reabrir-ano', 'migracao', 'confeccionar', 'prontos', 'entregues', 'devendo', 'alunos', 'matricula', 'diario', 'funcionarios', 'turmas', 'alocacoes', 'usuarios', 'administracao', 'relatorios'].forEach((p) => {
+    ['calendario', 'fechar-ano', 'reabrir-ano', 'migracao', 'renovacao', 'confeccionar', 'prontos', 'entregues', 'devendo', 'alunos', 'matricula', 'diario', 'funcionarios', 'turmas', 'alocacoes', 'usuarios', 'administracao', 'relatorios'].forEach((p) => {
       $(`#painel-${p}`).hidden = p !== nome;
     });
     carregarPainel();
@@ -290,6 +291,7 @@
     if (estado.painel === 'fechar-ano') return carregarFecharAno();
     if (estado.painel === 'reabrir-ano') return carregarReabrirAno();
     if (estado.painel === 'migracao') return carregarMigracao();
+    if (estado.painel === 'renovacao') return carregarRenovacao();
     if (estado.painel === 'funcionarios') return carregarFuncionarios();
     if (estado.painel === 'turmas') return carregarTurmas();
     if (estado.painel === 'alocacoes') return carregarAlocacoes();
@@ -1539,6 +1541,7 @@
   ligarBusca('#busca-funcionarios', 'funcionarios');
   ligarBusca('#busca-turmas', 'turmas');
   ligarBusca('#busca-alocacoes', 'alocacoes');
+  ligarBusca('#busca-renovacao', 'renovacao');
 
   /* ---------------- pedido ---------------- */
 
@@ -3247,12 +3250,16 @@
     }
     let matriculados = 0;
     const falhas = [];
+    const avisos = [];
     for (const aluno of alunos) {
       try {
-        await api('POST', '/api/matriculas', {
+        const r = await api('POST', '/api/matriculas', {
           aluno_id: aluno.id, turma_id: turmaId, data_inicio: aluno.data || dataHoje(),
         });
         matriculados += 1;
+        for (const aviso of (r && r.avisos) || []) {
+          avisos.push(`${aluno.nome}: ${aviso}`);
+        }
       } catch (e) {
         falhas.push(`${aluno.nome}: ${e.message}`);
       }
@@ -3261,6 +3268,7 @@
     estado.matriculaLote.selecionados.clear();
     renderizarSelecionadosLote();
     if (matriculados > 0) notificar(`${matriculados} aluno(s) matriculado(s) com sucesso.`, 'sucesso');
+    if (avisos.length > 0) notificar(avisos.join('\n'), 'erro');
     if (falhas.length > 0) notificar(`Não foi possível matricular ${falhas.length} aluno(s):\n${falhas.join('\n')}`, 'erro');
     carregarMatricula();
   });
@@ -3722,6 +3730,9 @@
                    aria-label="Migrar ${esc(a.nome)}" ${a.ja_migrado ? 'disabled' : ''}></td>
         <td>${esc(a.nome)}</td>
         <td>${a.situacao ? pillSituacaoFinal(a.situacao) : '<span class="secundario">não registrada</span>'}</td>
+        <td>${a.renovado
+          ? '<span class="pill verde">Renovado</span>'
+          : '<span class="pill ambar">Sem renovação</span>'}</td>
         <td>${a.ja_migrado ? '<span class="pill azul">já matriculado</span>' : ''}</td>
       </tr>`).join('');
     $('#migracao-vazio-alunos').hidden = alunos.length !== 0;
@@ -3761,6 +3772,25 @@
     const dados = estado.migracao.dados || {};
     const origem = (dados.origens || []).find((t) => t.id === origemId);
     const destino = (dados.destinos || []).find((t) => t.id === destinoId);
+
+    // Aviso (nunca bloqueia): conta os selecionados sem renovação para
+    // deixar a cobrança explícita na janela de confirmação.
+    const alunos = (dados.alunos || []);
+    const semRenovacao = alunos.filter(
+      (a) => !a.renovado && matriculas.includes(a.matricula_id)
+    ).length;
+
+    const avisos = [
+      '<li>As matrículas do ano encerrado são preservadas como histórico.</li>',
+      '<li>Aluno que já tem matrícula no novo ano é ignorado automaticamente.</li>',
+    ];
+    if (semRenovacao > 0) {
+      avisos.push(
+        `<li><b>${semRenovacao} aluno(s) sem renovação de matrícula</b> — a migração segue mesmo assim; ` +
+        'acompanhe os pendentes no relatório "Renovação de Matrícula".</li>'
+      );
+    }
+
     abrirConfirmacaoExclusao(
       {
         rota: '/api/migracao',
@@ -3770,10 +3800,7 @@
         mensagem: `${matriculas.length} aluno(s) migrado(s) com sucesso.`,
         rotulo: `Sim, migrar ${matriculas.length} aluno(s)`,
         cabecalho: 'Os alunos selecionados receberão matrícula na turma de destino:',
-        avisosHtml: [
-          '<li>As matrículas do ano encerrado são preservadas como histórico.</li>',
-          '<li>Aluno que já tem matrícula no novo ano é ignorado automaticamente.</li>',
-        ],
+        avisosHtml: avisos,
         aposConfirmar: () => carregarMigracao(),
       },
       `<b>${esc(origem ? origem.sigla : '')}</b> (${origem ? origem.ano_letivo : ''}) → ` +
@@ -3800,6 +3827,140 @@
       },
       `<b>${esc(m.origem_sigla)}</b> (${m.origem_ano}) → <b>${esc(m.destino_sigla)}</b> (${m.destino_ano})` +
         `<br>${m.total} aluno(s) migrado(s) em ${esc(formatarDataHora(m.criado_em))}`
+    );
+  }
+
+  /* ---------------- renovação de matrícula ---------------- */
+
+  async function popularAnosRenovacao() {
+    const select = $('#renovacao-ano');
+    if (select.dataset.populado) return;
+    try {
+      const dados = await api('GET', '/api/turmas?porPagina=500');
+      const anos = [...new Set((dados.itens || []).map((t) => t.ano_letivo))].sort((a, b) => b - a);
+      const anoAtual = new Date().getFullYear();
+      select.innerHTML = '<option value="">— Selecione o ano letivo —</option>' +
+        anos.map((a) => `<option value="${a}"${a === anoAtual ? ' selected' : ''}>${a}</option>`).join('');
+      select.dataset.populado = '1';
+      if (!estado.renovacao.ano) {
+        estado.renovacao.ano = anos.includes(anoAtual) ? anoAtual : (anos[0] || null);
+      }
+      if (estado.renovacao.ano) select.value = String(estado.renovacao.ano);
+    } catch (e) {
+      if (e.status !== 401) notificar(e.message, 'erro');
+    }
+  }
+
+  async function carregarRenovacao() {
+    await popularAnosRenovacao();
+    const ano = estado.renovacao.ano;
+    if (!ano) {
+      estado.renovacao.itens = [];
+      renderizarRenovacao();
+      return;
+    }
+    const parametros = new URLSearchParams({ ano_letivo: ano });
+    const busca = estado.buscas.renovacao;
+    if (busca) parametros.set('q', busca);
+    try {
+      const dados = await api('GET', `/api/renovacoes?${parametros.toString()}`);
+      estado.renovacao.itens = dados.itens || [];
+      renderizarRenovacao();
+    } catch (e) {
+      if (e.status !== 401) notificar(e.message, 'erro');
+    }
+  }
+
+  function renderizarRenovacao() {
+    const itens = estado.renovacao.itens;
+    const ano = estado.renovacao.ano;
+    const renovados = itens.filter((i) => i.renovado).length;
+    const pendentes = itens.length - renovados;
+
+    const status = $('#renovacao-status');
+    status.textContent = itens.length
+      ? `${itens.length} aluno(s) no ano ${ano}: ${renovados} renovado(s) · ${pendentes} sem renovação.`
+      : '';
+    status.hidden = itens.length === 0;
+
+    $('#corpo-renovacao').innerHTML = itens.map((item) => {
+      const situacao = SITUACOES_MATRICULA[item.status_matricula];
+      const renovacao = item.renovado
+        ? `<span class="pill verde">Renovado em ${esc(formatarData(item.renovacao_data))}</span>`
+        : '<span class="pill ambar">Sem renovação</span>';
+      const acao = item.renovado
+        ? `<button type="button" class="btn texto" data-renovacao-desfazer="${item.aluno_id}">Desfazer</button>`
+        : `<button type="button" class="btn" data-renovacao-registrar="${item.aluno_id}">Registrar renovação</button>`;
+      return `<tr>
+        <td>${esc(item.nome)}</td>
+        <td>${esc(item.cpf || '')}</td>
+        <td>${esc(item.turma_sigla)} — ${esc(item.ano_escolaridade)} · ${esc(item.turno)}</td>
+        <td>${situacao ? `<span class="pill ${situacao[1]}">${situacao[0]}</span>` : '—'}</td>
+        <td>${renovacao}</td>
+        <td>${acao}</td>
+      </tr>`;
+    }).join('');
+
+    const vazio = $('#renovacao-vazio');
+    vazio.hidden = itens.length !== 0;
+    if (itens.length === 0) {
+      vazio.textContent = estado.buscas.renovacao
+        ? 'Nenhum aluno encontrado para a busca.'
+        : (ano ? `Nenhum aluno com matrícula no ano ${ano}.` : 'Selecione o ano letivo de referência.');
+    }
+  }
+
+  function dadosRenovacao(alunoId) {
+    return (estado.renovacao.itens || []).find((i) => i.aluno_id === alunoId) || null;
+  }
+
+  function prepararRenovacao(alunoId) {
+    const item = dadosRenovacao(alunoId);
+    if (!item || item.renovado) return;
+    const ano = estado.renovacao.ano;
+    abrirConfirmacaoExclusao(
+      {
+        metodo: 'POST',
+        rota: '/api/renovacoes',
+        // Lido no momento da confirmação: o campo de data vive no modal.
+        get corpo() {
+          return {
+            aluno_id: item.aluno_id,
+            ano_letivo: Number($('#renovacao-ano').value) || ano,
+            data: $('#renovacao-data').value || dataHoje(),
+          };
+        },
+        titulo: 'Registrar renovação de matrícula',
+        mensagem: `Renovação de ${item.nome} registrada.`,
+        rotulo: 'Sim, registrar a renovação',
+        cabecalho: 'A renovação será registrada com a data informada abaixo:',
+        avisosHtml: ['<li>Para corrigir depois, use <b>Desfazer</b> e registre novamente.</li>'],
+        aposConfirmar: () => carregarRenovacao(),
+      },
+      `<b>${esc(item.nome)}</b> — CPF ${esc(item.cpf || '')}<br>` +
+      `Turma ${esc(item.turma_sigla)} — ${esc(item.ano_escolaridade)} · ${esc(item.turno)} (${ano})` +
+      `<label class="campo" style="margin-top:8px"><span>Data da renovação</span>` +
+      `<input type="date" id="renovacao-data" value="${dataHoje()}"></label>`
+    );
+  }
+
+  function prepararDesfazerRenovacao(alunoId) {
+    const item = dadosRenovacao(alunoId);
+    const ano = estado.renovacao.ano;
+    if (!item || !item.renovado || !ano) return;
+    abrirConfirmacaoExclusao(
+      {
+        metodo: 'DELETE',
+        rota: `/api/renovacoes/${alunoId}?ano_letivo=${ano}`,
+        corpo: {},
+        titulo: 'Desfazer renovação de matrícula',
+        mensagem: `Renovação de ${item.nome} desfeita.`,
+        rotulo: 'Sim, desfazer a renovação',
+        cabecalho: 'A renovação abaixo será removida:',
+        avisosHtml: ['<li>O aluno volta a aparecer como pendente no relatório de renovação.</li>'],
+        aposConfirmar: () => carregarRenovacao(),
+      },
+      `<b>${esc(item.nome)}</b> — renovado em ${esc(formatarData(item.renovacao_data))} (ano ${ano})`
     );
   }
 
@@ -4183,6 +4344,17 @@
   document.addEventListener('click', (evento) => {
     const botao = evento.target.closest('[data-migracao-desfazer]');
     if (botao) prepararDesfazerMigracao(Number(botao.dataset.migracaoDesfazer));
+  });
+
+  $('#renovacao-ano').addEventListener('change', () => {
+    estado.renovacao.ano = Number($('#renovacao-ano').value) || null;
+    carregarRenovacao();
+  });
+  document.addEventListener('click', (evento) => {
+    const registrar = evento.target.closest('[data-renovacao-registrar]');
+    if (registrar) prepararRenovacao(Number(registrar.dataset.renovacaoRegistrar));
+    const desfazer = evento.target.closest('[data-renovacao-desfazer]');
+    if (desfazer) prepararDesfazerRenovacao(Number(desfazer.dataset.renovacaoDesfazer));
   });
 
   preencherCensoPadrao();
