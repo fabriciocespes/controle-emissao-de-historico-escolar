@@ -3851,8 +3851,18 @@
     }
   }
 
+  // Cabeçalho da tela: o ano alvo é sempre o ano de referência + 1.
+  function atualizarDescricaoRenovacao() {
+    const ano = estado.renovacao.ano;
+    $('#renovacao-descricao').textContent = ano
+      ? `Renovação de matrícula dos alunos para o Ano de ${ano + 1} `
+        + `(sendo que o “${ano + 1}” vai ser sempre o ano de referência + 1)`
+      : '';
+  }
+
   async function carregarRenovacao() {
     await popularAnosRenovacao();
+    atualizarDescricaoRenovacao();
     const ano = estado.renovacao.ano;
     if (!ano) {
       estado.renovacao.itens = [];

@@ -155,7 +155,7 @@ Aba **Devendo Histórico**: alunos que ficaram com um histórico em pendência (
   4. Todo o lote fica registrado em **Migrações anteriores**, com botão **Desfazer** que remove apenas as matrículas criadas — se algum aluno já tiver sido movimentado no novo ano (transferido etc.), a operação é recusada e lista os nomes para correção manual.
   5. A coluna **Renovação** mostra quem já renovou a matrícula (seção 4.10.1) e a janela de confirmação avisa quantos alunos do lote estão **sem renovação** — a migração segue mesmo assim (aviso, nunca bloqueio).
 - **Renovar matrícula** *(4.10.1)* — admin e operador: registre o comparecimento dos pais/responsáveis à unidade escolar próximo ao fim do ano letivo.
-  1. Escolha o **ano letivo de referência** (o ano em que os alunos estudam — é ele que aparece no relatório de pendências) e **busque o aluno por nome ou CPF**.
+  1. Escolha o **ano letivo de referência** (o ano em que os alunos estudam — é ele que aparece no relatório de pendências; o cabeçalho da tela mostra o **Ano alvo = referência + 1**) e **busque o aluno por nome ou CPF**.
   2. Clique em **Registrar renovação** na linha do aluno: a janela já vem com a **data de hoje**, que você pode editar antes de confirmar (é a data do atendimento).
   3. A linha passa a exibir **Renovado em dd/mm/aaaa**, com botão **Desfazer**; o contador no topo mostra quantos renovaram e quantos ainda faltam.
   4. **Nunca bloqueia:** quem não renovou aparece apenas como aviso ao alocar/matricular no próximo ano e como pendência no relatório (seção 4.11). Alunos **transferidos** ficam fora da tela e do relatório (não renovam para esta escola).
