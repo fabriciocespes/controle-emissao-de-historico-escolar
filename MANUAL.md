@@ -128,6 +128,7 @@ Aba **Devendo Histórico**: alunos que ficaram com um histórico em pendência (
 | **Turmas** | Ano letivo, matriz (Educação Infantil, EF Anos Iniciais, EF Anos Finais), ano de escolaridade, sigla, turno e tipo (NAI/NAF) | **+ Nova turma**, busca, Editar/Excluir¹ |
 
 - O **CPF é validado** (precisa ser um CPF real); aluno e funcionário são buscados por nome, CPF ou matrícula.
+- Na **visualização do aluno** (olho da lista), a **turma da matrícula vigente** aparece como primeira linha do início da tela, logo antes da *Situação atual* — com sigla, série, turno e ano letivo. Aluno sem matrícula ativa não exibe a linha (a situação já indica o motivo).
 - A **sigla da turma é única dentro do ano letivo** — o sistema recusa a duplicata na criação e na edição.
 - Turmas já encerradas aparecem com a etiqueta **Fechada** (ver seção 4.10).
 - ¹ *Excluir é restrito ao administrador; antes de apagar, o sistema mostra tudo que depende daquele cadastro.*

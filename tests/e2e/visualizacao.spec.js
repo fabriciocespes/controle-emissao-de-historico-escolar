@@ -76,7 +76,7 @@ test.afterAll(async ({ browser }) => {
 test('olho visualiza dados cadastrais de aluno, funcionario, turma e alocacao', async ({ page, context }) => {
   await entrar(page);
   const csrf = await apiLogin(context);
-  await apiPost(context, csrf, '/api/alunos', alunoVisual());
+  const aluno = await apiPost(context, csrf, '/api/alunos', alunoVisual());
   const func = await apiPost(context, csrf, '/api/funcionarios', funcionarioVisual());
   const turma = await apiPost(context, csrf, '/api/turmas', {
     ano_letivo: new Date().getFullYear(),
@@ -86,6 +86,7 @@ test('olho visualiza dados cadastrais de aluno, funcionario, turma e alocacao', 
     turno: 'Manhã',
     tipo_turma: 'NAF',
   });
+  await apiPost(context, csrf, '/api/matriculas', { aluno_id: aluno.id, turma_id: turma.id });
   await apiPost(context, csrf, '/api/alocacoes', {
     turma_id: turma.id,
     professor_id: func.id,
@@ -101,6 +102,12 @@ test('olho visualiza dados cadastrais de aluno, funcionario, turma e alocacao', 
   await expect(page.locator('#ver-titulo')).toContainText(NOME_ALUNO);
   await expect(page.locator('#ver-corpo')).toContainText('529.982.247-25');
   await expect(page.locator('#ver-corpo')).toContainText('Responsavel Visualizacao');
+  // A turma vem logo no início, como primeira linha do grupo de situação.
+  const primeiraLinha = page.locator('#ver-corpo .detalhe').first();
+  await expect(primeiraLinha.locator('.detalhe-rotulo')).toHaveText('Turma');
+  await expect(primeiraLinha.locator('.detalhe-valor'))
+    .toHaveText(`${SIGLA} — 7º ano · Manhã (${new Date().getFullYear()})`);
+  await expect(page.locator('#ver-corpo')).toContainText('Situação atual');
   await page.click('#modal-ver .fecha');
   await expect(page.locator('#modal-ver')).toBeHidden();
 

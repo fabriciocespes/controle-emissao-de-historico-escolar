@@ -915,16 +915,31 @@
     return { ativa, transferida, deixou, opcoes };
   }
 
+  // Turma da matrícula vigente do aluno: a ativa mais recente, preferindo o
+  // ano letivo mais alto (matrículas de anos encerrados continuam ativas
+  // como histórico do Diário). Sem matrícula ativa, a linha não aparece.
+  function turmaAtualHtml(matriculas) {
+    const ativas = matriculas.filter((m) => m.status === 'matriculado' && m.ativo);
+    if (!ativas.length) return '';
+    const atual = ativas.sort((a, b) =>
+      (Number(b.turma_ano_letivo) || 0) - (Number(a.turma_ano_letivo) || 0) ||
+      String(b.criado_em || '').localeCompare(String(a.criado_em || ''))
+    )[0];
+    return esc(`${atual.turma_sigla} — ${atual.ano_escolaridade} · ${atual.turno} (${atual.turma_ano_letivo})`);
+  }
+
   function situacaoAlunoGrupo(item, matriculas) {
     const { opcoes } = analisarAcoesAluno(matriculas);
     const ajuda = opcoes.length > 1
       ? ''
       : '<div class="secundario">Nenhuma ação disponível para este aluno.</div>';
+    const turma = turmaAtualHtml(matriculas);
+    const pares = [];
+    if (turma) pares.push(['Turma', turma]);
+    pares.push(['Situação atual', situacaoMatriculaHtml(item, matriculas) + ajuda]);
     return {
       titulo: 'Situação da matrícula',
-      pares: [
-        ['Situação atual', situacaoMatriculaHtml(item, matriculas) + ajuda],
-      ],
+      pares,
     };
   }
 
