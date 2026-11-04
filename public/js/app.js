@@ -2234,6 +2234,45 @@
 
   $('#btn-novo-aluno').addEventListener('click', abrirAlunoNovo);
 
+  $('#btn-importar-alunos').addEventListener('click', () => {
+    $('#importar-alunos-arquivo').click();
+  });
+
+  $('#importar-alunos-arquivo').addEventListener('change', async (evento) => {
+    const arquivo = evento.target.files && evento.target.files[0];
+    evento.target.value = '';
+    if (!arquivo) return;
+    try {
+      // Excel pt-BR costuma salvar CSV em ANSI (windows-1252); tenta UTF-8
+      // estrito primeiro e cai para a codificação do Windows se falhar.
+      const buffer = await arquivo.arrayBuffer();
+      let texto;
+      try {
+        texto = new TextDecoder('utf-8', { fatal: true }).decode(buffer);
+      } catch {
+        texto = new TextDecoder('windows-1252').decode(buffer);
+      }
+      const dados = await api('POST', '/api/alunos/importar', texto, {
+        bruto: true,
+        tipoCorpo: 'text/csv; charset=utf-8',
+      });
+      notificar(`${dados.importados} aluno(s) importado(s) com sucesso.`, 'sucesso');
+      carregarAlunos();
+    } catch (e) {
+      if (e.erros && e.erros.length) {
+        const detalhes = e.erros
+          .slice(0, 3)
+          .map((item) => `linha ${item.linha}: ${Object.values(item.campos).join('; ')}`)
+          .join(' | ');
+        const excesso = e.erros.length > 3 ? ' …' : '';
+        notificar(`${e.message} ${detalhes}${excesso}`, 'erro');
+        console.warn('Problemas na importação:', e.erros);
+      } else if (e.status !== 401) {
+        notificar(e.message, 'erro');
+      }
+    }
+  });
+
   $('#form-aluno').addEventListener('submit', async (evento) => {
     evento.preventDefault();
     const form = evento.currentTarget;

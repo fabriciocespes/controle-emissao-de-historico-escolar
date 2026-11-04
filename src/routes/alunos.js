@@ -4,6 +4,8 @@ const { validarData, dataLocal, formatarDataBR } = require('../utils/data');
 const { normalizar } = require('../utils/texto');
 const { agora } = require('../db');
 const { exigirPerfil } = require('../auth');
+const { emTransacao } = require('../utils/dependencias');
+const { parseCsv } = require('../utils/csv');
 
 const POR_PAGINA = 50;
 
@@ -48,6 +50,53 @@ const COLUNAS = [
   'beneficio_tipo', 'educacenso', 'nis', 'transporte_poder', 'transporte_veiculo',
   'transporte_escolar', 'transporte_adaptado', 'transporte_km', 'autoriza_imagem',
 ];
+
+// Colunas do arquivo de importação em lote (POST /importar): subconjunto
+// útil da tabela "alunos" — todos os campos obrigatórios do validador +
+// os opcionais mais usados. O cabeçalho do CSV deve trazer exatamente
+// estes nomes, nesta ordem (o modelo baixável é gerado a partir daqui).
+const COLUNAS_CSV = [
+  'nome', 'nome_social', 'data_nascimento', 'cpf', 'sexo', 'estado_civil', 'raca',
+  'nacionalidade', 'pais_origem', 'estado_origem', 'naturalidade', 'tipo_sanguineo',
+  'filiacao1_nome', 'filiacao1_cpf', 'filiacao1_telefone',
+  'filiacao2_nome', 'filiacao2_cpf',
+  'responsavel_nome', 'responsavel_cpf', 'responsavel_parentesco',
+  'responsavel_estado_civil', 'responsavel_telefone', 'responsavel_email',
+  'cep', 'logradouro', 'numero', 'complemento', 'bairro', 'estado', 'cidade',
+  'zona_residencial',
+  'rg_numero', 'rg_estado_emissor', 'rg_data_emissao',
+  'certidao_tipo', 'certidao_cartorio', 'certidao_data_emissao',
+  'cartao_sus', 'nis', 'educacenso',
+  'beneficio_social', 'beneficio_tipo', 'alergico', 'alergia_tipo',
+  'deficiencias', 'deficiencia_outros', 'codigo_cid', 'outros_laudos',
+  'ue_origem', 'devendo_historico',
+];
+
+// Datas do arquivo chegam em dd/mm/aaaa (formato do Excel em pt-BR);
+// yyyy-mm-dd passa direto.
+const DATAS_CSV = ['data_nascimento', 'rg_data_emissao', 'certidao_data_emissao'];
+
+function converterDataCsv(valor) {
+  const v = String(valor || '').trim();
+  const m = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : v;
+}
+
+// Detecta o separador do arquivo pelo cabeçalho — os nomes de campo não
+// contêm ';' nem ',', então contar resolve.
+function separadorCsv(texto) {
+  const cabecalho = String(texto || '').split(/\r?\n/)[0] || '';
+  const pontoEVirgula = (cabecalho.match(/;/g) || []).length;
+  const virgula = (cabecalho.match(/,/g) || []).length;
+  return pontoEVirgula >= virgula ? ';' : ',';
+}
+
+function normalizarSimNao(valor) {
+  const v = String(valor || '').trim().toLowerCase();
+  if (v === 'sim') return 'sim';
+  if (v === 'nao' || v === 'não' || v === 'n') return 'nao';
+  return v;
+}
 
 function limparTexto(valor, max) {
   return String(valor || '').replace(/\s+/g, ' ').trim().slice(0, max);
@@ -615,6 +664,115 @@ function rotasAlunos({ db }) {
     return resposta.status(201).json(formatarAluno(buscarAluno(id)));
   });
 
+  // Importação em lote por CSV: valida o cabeçalho contra o modelo,
+  // valida TODAS as linhas antes de inserir qualquer uma (ou nada entra)
+  // e grava tudo em transação. Aceita ';' (padrão) e ',' (Excel em outro
+  // locale). Um CPF já cadastrado ou repetido no arquivo vira erro de
+  // linha — nunca duplica aluno.
+  roteador.post(
+    '/importar',
+    express.text({ type: ['text/csv', 'text/plain'], limit: '5mb' }),
+    (requisicao, resposta) => {
+      const texto = typeof requisicao.body === 'string' ? requisicao.body : '';
+      if (!texto.trim()) throw erro(400, 'Envie o conteúdo do arquivo CSV.');
+
+      const linhas = parseCsv(texto, separadorCsv(texto))
+        .filter((linha) => linha.some((campo) => campo.trim() !== ''));
+      const [cabecalho, ...registros] = linhas;
+      const normalizado = (cabecalho || []).map((campo) => campo.trim());
+      if (
+        normalizado.length !== COLUNAS_CSV.length ||
+        normalizado.some((campo, i) => campo !== COLUNAS_CSV[i])
+      ) {
+        throw erro(400, 'O cabeçalho do arquivo não corresponde ao modelo de importação de alunos.');
+      }
+      if (!registros.length) throw erro(400, 'O arquivo não tem registros para importar.');
+
+      const erros = [];
+      const pendentes = [];
+      const cpfsNoArquivo = new Set();
+
+      registros.forEach((valores, indice) => {
+        const numero = indice + 2;
+        const nome = limparTexto(valores[0], 150);
+        if (valores.length !== COLUNAS_CSV.length) {
+          erros.push({
+            linha: numero,
+            nome,
+            campos: { csv: `Encontrado ${valores.length} campos; esperado ${COLUNAS_CSV.length}.` },
+          });
+          return;
+        }
+
+        const corpo = {};
+        COLUNAS_CSV.forEach((coluna, i) => {
+          corpo[coluna] = valores[i];
+        });
+        for (const campo of DATAS_CSV) corpo[campo] = converterDataCsv(corpo[campo]);
+        corpo.devendo_historico = normalizarSimNao(corpo.devendo_historico);
+
+        // "deficiencias" vem como lista de marcações separadas por " | "
+        // (ex.: dv_cego | outros) e vira as flags def_* que o validador
+        // espera, ligando/desligando o bloco de condição.
+        const marcas = String(corpo.deficiencias || '')
+          .split('|')
+          .map((m) => m.trim())
+          .filter(Boolean);
+        const desconhecida = marcas.find((m) => !MARCAS_DEFICIENCIA.includes(m));
+        if (desconhecida) {
+          erros.push({
+            linha: numero,
+            nome,
+            campos: { deficiencias: `Marcação inválida: ${desconhecida}.` },
+          });
+          return;
+        }
+        for (const marca of marcas) corpo[`def_${marca}`] = true;
+        corpo.tem_condicao = marcas.length ? 'Sim' : 'Não';
+
+        let dados;
+        try {
+          dados = validarAluno(corpo);
+        } catch (e) {
+          erros.push({ linha: numero, nome, campos: e.campos || { csv: e.message } });
+          return;
+        }
+
+        if (cpfsNoArquivo.has(dados.cpf)) {
+          erros.push({ linha: numero, nome, campos: { cpf: 'CPF repetido no arquivo.' } });
+          return;
+        }
+        if (acharCpfDuplicado(dados.cpf)) {
+          erros.push({
+            linha: numero,
+            nome,
+            campos: { cpf: 'Já existe um aluno cadastrado com este CPF.' },
+          });
+          return;
+        }
+        cpfsNoArquivo.add(dados.cpf);
+
+        pendentes.push(dados);
+      });
+
+      if (erros.length) {
+        const e = erro(400, `Encontramos ${erros.length} problema(s). Nenhum aluno foi importado.`);
+        e.erros = erros;
+        throw e;
+      }
+
+      emTransacao(db, () => {
+        const instante = agora();
+        for (const dados of pendentes) {
+          const id = Number(inserir(dados, requisicao.usuario.id, instante).lastInsertRowid);
+          sincronizarDevendo(id, dados, requisicao.usuario.id, instante);
+        }
+      });
+
+      return resposta.status(201).json({ importados: pendentes.length });
+    }
+  );
+
   roteador.put('/:id(\\d+)', (requisicao, resposta) => {
     const id = Number(requisicao.params.id);
     const existente = db.prepare('SELECT id FROM alunos WHERE id = ?').get(id);
@@ -676,4 +834,4 @@ function rotasAlunos({ db }) {
   return roteador;
 }
 
-module.exports = { rotasAlunos, validarAluno };
+module.exports = { rotasAlunos, validarAluno, COLUNAS_CSV };

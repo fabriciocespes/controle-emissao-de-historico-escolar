@@ -14,6 +14,7 @@ const { lerConfig } = require('../src/config');
 const { abrirBanco } = require('../src/db');
 const { criarApp } = require('../src/app');
 const { validarCPF, formatarCPF } = require('../src/utils/cpf');
+const { COLUNAS_CSV } = require('../src/routes/alunos');
 
 const config = lerConfig();
 let servidor;
@@ -4211,5 +4212,155 @@ test('renovação de matrícula: busca, registro, aviso na matrícula, relatóri
       const excluido = await admin.enviar('DELETE', `/api/alunos/${alunoId}`, { confirmar: true });
       assert.equal(excluido.status, 200, JSON.stringify(excluido.json));
     }
+  }
+});
+
+/* ---------------- importação de CSV de alunos ---------------- */
+
+function csvAlunoLinha(sobrescrita = {}, separador = ';') {
+  const campos = {
+    nome: 'Aluno Importado da Silva',
+    data_nascimento: '15/04/2015',
+    cpf: cpfNovo('970000000'),
+    sexo: 'Feminino',
+    estado_civil: 'Solteiro',
+    raca: 'Parda',
+    nacionalidade: 'Brasileira',
+    estado_origem: 'RJ',
+    naturalidade: 'Campos dos Goytacazes',
+    filiacao1_nome: 'Maria Importada da Silva',
+    responsavel_nome: 'Maria Importada da Silva',
+    responsavel_cpf: '390.533.447-05',
+    responsavel_parentesco: 'Mãe',
+    cep: '28010000',
+    logradouro: 'Rua Importação',
+    numero: '45',
+    bairro: 'Centro',
+    estado: 'RJ',
+    cidade: 'Campos dos Goytacazes',
+    zona_residencial: 'Urbana',
+    devendo_historico: 'nao',
+    ...sobrescrita,
+  };
+  return COLUNAS_CSV.map((c) => campos[c] ?? '').join(separador);
+}
+
+function csvAlunoArquivo(separador, linhas) {
+  return [COLUNAS_CSV.join(separador), ...linhas].join('\r\n');
+}
+
+async function importarAlunosCsv(cliente, csv) {
+  return cliente.enviar('POST', '/api/alunos/importar', undefined, {
+    corpoBruto: csv,
+    contentType: 'text/csv',
+  });
+}
+
+test('importacao de CSV de alunos: valida, converte datas e cria em transacao', async () => {
+  const admin = new Cliente(base);
+  await admin.login('admin', 'admin123');
+  const operadora = new Cliente(base);
+  await operadora.login('ana', 'outraSenha1');
+
+  const csv = csvAlunoArquivo(';', [
+    csvAlunoLinha(),
+    csvAlunoLinha({
+      nome: 'Aluno Importado Com Deficiencia',
+      cpf: cpfNovo('970000001'),
+      data_nascimento: '01/12/2014',
+      devendo_historico: 'Sim',
+      deficiencias: 'dv_cego',
+    }),
+  ]);
+  const r = await importarAlunosCsv(admin, csv);
+  assert.equal(r.status, 201, JSON.stringify(r.json));
+  assert.equal(r.json.importados, 2);
+
+  const busca = await admin.enviar('GET', '/api/alunos?q=Aluno Importado');
+  assert.equal(busca.json.total, 2, JSON.stringify(busca.json));
+  const silva = busca.json.itens.find((i) => i.nome === 'Aluno Importado da Silva');
+  const deficiente = busca.json.itens.find((i) => i.nome === 'Aluno Importado Com Deficiencia');
+  assert.ok(silva && deficiente);
+  assert.equal(silva.data_nascimento, '2015-04-15', 'dd/mm/aaaa vira aaaa-mm-dd');
+  assert.equal(silva.nascimento_br, '15/04/2015');
+  assert.equal(deficiente.data_nascimento, '2014-12-01');
+  assert.equal(deficiente.deficiencias, 'dv_cego');
+  assert.equal(deficiente.devendo_historico, 'sim', 'Sim normaliza e a ficha de devendo nasce');
+
+  // Operadora também importa; separador por vírgula (Excel em outro locale) serve.
+  const csvVirgula = csvAlunoArquivo(',', [
+    csvAlunoLinha({ nome: 'Aluno Importado Por Virgula', cpf: cpfNovo('970000002') }, ','),
+  ]);
+  const r2 = await importarAlunosCsv(operadora, csvVirgula);
+  assert.equal(r2.status, 201, JSON.stringify(r2.json));
+  assert.equal(r2.json.importados, 1);
+
+  const busca2 = await admin.enviar('GET', '/api/alunos?q=Aluno Importado');
+  assert.equal(busca2.json.total, 3, JSON.stringify(busca2.json.itens.map((i) => i.nome)));
+
+  const pendentes = [...busca.json.itens, ...busca2.json.itens];
+  const unicos = [...new Map(pendentes.map((i) => [i.id, i])).values()];
+  for (const item of unicos) {
+    const excluido = await admin.enviar('DELETE', `/api/alunos/${item.id}`, { confirmar: true });
+    assert.equal(excluido.status, 200, JSON.stringify(excluido.json));
+  }
+  const vazio = await admin.enviar('GET', '/api/alunos?q=Aluno Importado');
+  assert.equal(vazio.json.total, 0);
+});
+
+test('importacao de CSV de alunos: linha invalida aborta e CPF duplicado e recusado', async () => {
+  const admin = new Cliente(base);
+  await admin.login('admin', 'admin123');
+
+  const cabecalhoErrado = await importarAlunosCsv(admin, 'a;b;c\r\n1;2;3');
+  assert.equal(cabecalhoErrado.status, 400);
+  assert.ok(cabecalhoErrado.json.erro.includes('cabeçalho'));
+
+  const semRegistros = await importarAlunosCsv(admin, COLUNAS_CSV.join(';'));
+  assert.equal(semRegistros.status, 400);
+  assert.ok(semRegistros.json.erro.includes('não tem registros'));
+
+  const semConteudo = await importarAlunosCsv(admin, '   ');
+  assert.equal(semConteudo.status, 400);
+
+  // Linha inválida zera a importação inteira (nada entra).
+  const linhaBoa = csvAlunoLinha({ nome: 'Aluno Importado Valido' });
+  const linhaRuim = csvAlunoLinha({ nome: 'Aluno Importado Ruim', cpf: '123.456.789-00' });
+  const misto = await importarAlunosCsv(admin, csvAlunoArquivo(';', [linhaBoa, linhaRuim]));
+  assert.equal(misto.status, 400);
+  assert.ok(misto.json.erro.includes('Nenhum aluno foi importado'));
+  assert.equal(misto.json.erros.length, 1);
+  assert.equal(misto.json.erros[0].linha, 3);
+  assert.ok(misto.json.erros[0].campos.cpf);
+  assert.equal(misto.json.erros[0].nome, 'Aluno Importado Ruim');
+  let busca = await admin.enviar('GET', '/api/alunos?q=Aluno Importado');
+  assert.equal(busca.json.total, 0, 'nenhum aluno entrou');
+
+  const bom = await importarAlunosCsv(admin, csvAlunoArquivo(';', [linhaBoa]));
+  assert.equal(bom.status, 201, JSON.stringify(bom.json));
+  assert.equal(bom.json.importados, 1);
+
+  // CPF já cadastrado no banco vira erro de linha.
+  const deNovo = await importarAlunosCsv(admin, csvAlunoArquivo(';', [
+    csvAlunoLinha({ nome: 'Aluno Importado Repetido Banco' }),
+  ]));
+  assert.equal(deNovo.status, 400);
+  assert.ok(deNovo.json.erros[0].campos.cpf.includes('Já existe um aluno'));
+
+  // CPF repetido dentro do próprio arquivo também é erro de linha.
+  const cpf = cpfNovo('970000003');
+  const repetidoArquivo = await importarAlunosCsv(admin, csvAlunoArquivo(';', [
+    csvAlunoLinha({ nome: 'Aluno Importado Primeiro Repetido', cpf }),
+    csvAlunoLinha({ nome: 'Aluno Importado Segundo Repetido', cpf }),
+  ]));
+  assert.equal(repetidoArquivo.status, 400);
+  assert.ok(repetidoArquivo.json.erros[0].campos.cpf.includes('repetido no arquivo'));
+
+  busca = await admin.enviar('GET', '/api/alunos?q=Aluno Importado');
+  assert.equal(busca.json.total, 1, 'só a linha válida foi importada');
+
+  for (const item of busca.json.itens) {
+    const excluido = await admin.enviar('DELETE', `/api/alunos/${item.id}`, { confirmar: true });
+    assert.equal(excluido.status, 200, JSON.stringify(excluido.json));
   }
 });

@@ -1,14 +1,18 @@
 const { test, expect } = require('@playwright/test');
 const { entrar, apiLogin, apiDelete, acharItens } = require('./ajudas');
+const { COLUNAS_CSV } = require('../../src/routes/alunos');
 
 const NOME_ALUNO = 'Aluno E2E Condicional';
+const NOME_IMPORTADO = 'Aluno Importado Lote E2E';
 
 test.afterAll(async ({ browser }) => {
   const context = await browser.newContext();
   try {
     const csrf = await apiLogin(context);
-    for (const aluno of await acharItens(context, '/api/alunos', NOME_ALUNO)) {
-      await apiDelete(context, csrf, `/api/alunos/${aluno.id}`);
+    for (const nome of [NOME_ALUNO, NOME_IMPORTADO]) {
+      for (const aluno of await acharItens(context, '/api/alunos', nome)) {
+        await apiDelete(context, csrf, `/api/alunos/${aluno.id}`);
+      }
     }
   } finally {
     await context.close();
@@ -94,4 +98,63 @@ test('busca de alunos filtra por nome e mostra o estado vazio', async ({ page })
 
   await page.fill('#busca-alunos', '');
   await expect(page.locator('#corpo-alunos tr', { hasText: NOME_ALUNO })).toBeVisible();
+});
+
+test('importar alunos em lote pelo botão Importar CSV', async ({ page, context }) => {
+  await apiLogin(context);
+  await page.goto('/');
+
+  const linha = (sobrescrita = {}) => {
+    const campos = {
+      nome: NOME_IMPORTADO,
+      data_nascimento: '10/03/2016',
+      cpf: '111.444.777-35',
+      sexo: 'Masculino',
+      estado_civil: 'Solteiro',
+      raca: 'Branca',
+      nacionalidade: 'Brasileira',
+      estado_origem: 'RJ',
+      naturalidade: 'Campos dos Goytacazes',
+      filiacao1_nome: 'Maria Importada E2E',
+      responsavel_nome: 'Maria Importada E2E',
+      responsavel_cpf: '390.533.447-05',
+      responsavel_parentesco: 'Mãe',
+      cep: '28010000',
+      logradouro: 'Rua das Flores',
+      numero: '10',
+      bairro: 'Centro',
+      estado: 'RJ',
+      cidade: 'Campos dos Goytacazes',
+      zona_residencial: 'Urbana',
+      devendo_historico: 'nao',
+      ...sobrescrita,
+    };
+    return COLUNAS_CSV.map((c) => campos[c] ?? '').join(';');
+  };
+  const arquivo = (linhaCsv) => ({
+    name: 'alunos-lote.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from(`${COLUNAS_CSV.join(';')}\r\n${linhaCsv}\r\n`, 'utf8'),
+  });
+
+  await page.click('.aba[data-painel="alunos"]');
+  await expect(page.locator('#btn-importar-alunos')).toBeVisible();
+
+  // Arquivo com problema: nada é importado e a notificação aponta a linha.
+  await page.setInputFiles('#importar-alunos-arquivo', arquivo(linha({ cpf: '123.456.789-00' })));
+  await expect(page.locator('#notificacoes .aviso.erro', {
+    hasText: 'Nenhum aluno foi importado',
+  })).toBeVisible();
+  await expect(page.locator('#corpo-alunos tr', { hasText: NOME_IMPORTADO })).toHaveCount(0);
+
+  // Arquivo válido: o aluno entra e aparece na lista.
+  await page.setInputFiles('#importar-alunos-arquivo', arquivo(linha()));
+  await expect(page.locator('#notificacoes .aviso.sucesso', {
+    hasText: '1 aluno(s) importado(s) com sucesso.',
+  })).toBeVisible();
+  await expect(page.locator('#corpo-alunos tr', { hasText: NOME_IMPORTADO })).toBeVisible();
+
+  await page.fill('#busca-alunos', 'Importado Lote');
+  await expect(page.locator('#corpo-alunos tr')).toHaveCount(1);
+  await expect(page.locator('#corpo-alunos tr', { hasText: NOME_IMPORTADO })).toBeVisible();
 });

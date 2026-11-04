@@ -1,4 +1,7 @@
-function parseCsv(texto) {
+// separador: ';' por padrão (padrão do projeto); aceita ',' para arquivos
+// salvos pelo Excel em locale que usa vírgula. O cabeçalho é plano (nomes
+// de campo sem vírgula/semicolon dentro), então dá para detectar fora.
+function parseCsv(texto, separador = ';') {
   const linhas = [];
   let campo = '';
   let linha = [];
@@ -19,7 +22,7 @@ function parseCsv(texto) {
       }
     } else if (c === '"') {
       dentroDeAspas = true;
-    } else if (c === ';') {
+    } else if (c === separador) {
       linha.push(campo);
       campo = '';
     } else if (c === '\n') {
