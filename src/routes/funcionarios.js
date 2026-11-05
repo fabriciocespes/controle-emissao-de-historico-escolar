@@ -554,4 +554,4 @@ function rotasFuncionarios({ db }) {
   return roteador;
 }
 
-module.exports = { rotasFuncionarios };
+module.exports = { rotasFuncionarios, COLUNAS, validarFuncionario };
