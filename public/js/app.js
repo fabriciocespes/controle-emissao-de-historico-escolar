@@ -254,6 +254,7 @@
     $('#aba-usuarios').hidden = estado.usuario.perfil !== 'admin';
     $('#aba-administracao').hidden = estado.usuario.perfil !== 'admin';
     $('#aba-migracao').hidden = estado.usuario.perfil !== 'admin';
+    $('#aba-backup').hidden = estado.usuario.perfil !== 'admin';
     $('#grupo-configuracoes').hidden = estado.usuario.perfil !== 'admin';
     abrirPainel('calendario');
     api('GET', '/api/pedidos/contagens').then(atualizarContadores).catch(() => {});
@@ -277,7 +278,7 @@
   function abrirPainel(nome) {
     estado.painel = nome;
     $$('.aba').forEach((a) => a.classList.toggle('ativa', a.dataset.painel === nome));
-    ['calendario', 'fechar-ano', 'reabrir-ano', 'migracao', 'renovacao', 'confeccionar', 'prontos', 'entregues', 'devendo', 'alunos', 'matricula', 'diario', 'funcionarios', 'turmas', 'alocacoes', 'usuarios', 'administracao', 'relatorios'].forEach((p) => {
+    ['calendario', 'fechar-ano', 'reabrir-ano', 'migracao', 'renovacao', 'confeccionar', 'prontos', 'entregues', 'devendo', 'alunos', 'matricula', 'diario', 'funcionarios', 'turmas', 'alocacoes', 'usuarios', 'administracao', 'backup', 'relatorios'].forEach((p) => {
       $(`#painel-${p}`).hidden = p !== nome;
     });
     carregarPainel();
@@ -297,6 +298,7 @@
     if (estado.painel === 'alocacoes') return carregarAlocacoes();
     if (estado.painel === 'usuarios') return carregarUsuarios();
     if (estado.painel === 'administracao') return carregarAdministracao();
+    if (estado.painel === 'backup') return carregarBackup();
     if (estado.painel === 'relatorios') return carregarRelatorios();
     if (estado.painel === 'devendo') return carregarDevendo();
     return carregarPedidos();
@@ -1754,7 +1756,7 @@
     const alvo = excluindo;
     try {
       await api(alvo.metodo || 'DELETE', alvo.rota,
-        alvo.corpo === undefined ? { confirmar: true } : alvo.corpo);
+        alvo.corpo === undefined ? { confirmar: true } : alvo.corpo, alvo.opcoes);
       excluindo = null;
       fecharModal($('#modal-excluir'));
       notificar(alvo.mensagem, 'sucesso');
@@ -1769,6 +1771,120 @@
 
   $('#modal-excluir').addEventListener('click', (evento) => {
     if (evento.target.closest('[data-fechar]')) excluindo = null;
+  });
+
+  /* ---------------- backup ---------------- */
+
+  function formatarTamanho(bytes) {
+    if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+    return `${bytes} B`;
+  }
+
+  async function carregarBackup() {
+    try {
+      const dados = await api('GET', '/api/backup');
+      renderizarBackup(dados);
+    } catch (e) {
+      if (e.status !== 401) notificar(e.message, 'erro');
+    }
+  }
+
+  function renderizarBackup(dados) {
+    $('#backup-manter').textContent = dados.manter;
+    const total = dados.backups.length;
+    $('#backup-vazio').hidden = total > 0;
+    $('#backup-status').textContent = total
+      ? `Último backup em ${formatarDataHora(dados.ultimo.criado_em)} · ${total} arquivo(s) guardados em ${dados.diretorio}`
+      : 'Nenhum backup criado ainda — o primeiro sai automaticamente na próxima vez que o sistema abrir.';
+    $('#corpo-backups').innerHTML = dados.backups
+      .map(
+        (b) => `<tr>
+          <td>${esc(b.arquivo)}</td>
+          <td>${formatarDataHora(b.criado_em)}</td>
+          <td>${formatarTamanho(b.tamanho)}</td>
+          <td class="acao"><button type="button" class="btn texto" data-baixar-backup="${esc(b.arquivo)}">Baixar</button></td>
+        </tr>`
+      )
+      .join('');
+    $('#restaurar-servidor').innerHTML = total
+      ? dados.backups.map((b) => `<option value="${esc(b.arquivo)}">${esc(b.arquivo)} · ${formatarDataHora(b.criado_em)}</option>`).join('')
+      : '<option value="">Nenhum backup disponível</option>';
+    $('#restaurar-servidor').disabled = total === 0;
+  }
+
+  function atualizarOrigemRestauracao() {
+    const servidor = $('#restaurar-opcao-servidor').checked;
+    $('#restaurar-bloco-arquivo').hidden = servidor;
+    $('#restaurar-bloco-servidor').hidden = !servidor;
+  }
+
+  $('#btn-gerar-backup').addEventListener('click', async () => {
+    const botao = $('#btn-gerar-backup');
+    botao.disabled = true;
+    try {
+      const dados = await api('POST', '/api/backup/gerar', {});
+      renderizarBackup(dados);
+      notificar(`Backup criado: ${dados.criado.arquivo}`, 'sucesso');
+    } catch (e) {
+      notificar(e.message, 'erro');
+    } finally {
+      botao.disabled = false;
+    }
+  });
+
+  $('#corpo-backups').addEventListener('click', (evento) => {
+    const botao = evento.target.closest('[data-baixar-backup]');
+    if (!botao) return;
+    const nome = botao.dataset.baixarBackup;
+    baixarDocumento(
+      `/api/backup/baixar?arquivo=${encodeURIComponent(nome)}`,
+      'Não foi possível baixar o backup.',
+      `Backup baixado: ${nome}`
+    );
+  });
+
+  $$('input[name="restaurar-origem"]').forEach((radio) =>
+    radio.addEventListener('change', atualizarOrigemRestauracao)
+  );
+
+  $('#btn-restaurar').addEventListener('click', () => {
+    const servidor = $('#restaurar-opcao-servidor').checked;
+    const arquivoServidor = $('#restaurar-servidor').value;
+    const arquivoLocal = $('#restaurar-arquivo').files[0];
+
+    if (servidor && !arquivoServidor) {
+      notificar('Nenhum backup disponível no servidor.', 'erro');
+      return;
+    }
+    if (!servidor && !arquivoLocal) {
+      notificar('Escolha o arquivo de backup (.db) para restaurar.', 'erro');
+      return;
+    }
+
+    const descricao = servidor
+      ? `Backup do servidor: ${arquivoServidor}`
+      : `Arquivo: ${arquivoLocal.name} (${formatarTamanho(arquivoLocal.size)})`;
+
+    abrirConfirmacaoExclusao(
+      {
+        titulo: 'Restaurar backup',
+        cabecalho:
+          'Todos os dados atuais serão substituídos pelos do backup abaixo. Uma cópia do estado atual será guardada como antes-restaurar-* antes de restaurar:',
+        rotulo: 'Sim, restaurar o backup',
+        mensagem: 'Backup restaurado com sucesso. Recarregando os dados…',
+        metodo: 'POST',
+        rota: servidor ? '/api/backup/restaurar-servidor' : '/api/backup/restaurar',
+        corpo: servidor ? { arquivo: arquivoServidor } : arquivoLocal,
+        opcoes: servidor ? undefined : { bruto: true, tipoCorpo: 'application/octet-stream' },
+        avisosHtml: [
+          `<li><b>${esc(descricao)}</b></li>`,
+          '<li>Sua sessão é preservada — você continuará logado.</li>',
+        ],
+        aposConfirmar: () => setTimeout(() => window.location.reload(), 700),
+      },
+      `<b>${esc(descricao)}</b>`
+    );
   });
 
   /* ---------------- confecção ---------------- */

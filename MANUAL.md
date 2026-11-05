@@ -190,6 +190,10 @@ O rodapé escuro, presente em todas as telas, mostra três colunas:
 - **Links úteis** — link da documentação (este manual no GitHub).
 - **Informações técnicas** — servidor (máquina:porta), versão do Node.js e última atualização do sistema.
 
+### 4.15 Backup (somente administrador)
+
+Menu **Backup**: lista os backups guardados no servidor com data e tamanho, botões **Salvar agora** e **Baixar**, e a área **Restaurar backup** (arquivo do computador ou backup do servidor, com confirmação). Detalhes na seção 7.
+
 ---
 
 ## 5. Usuários e permissões
@@ -212,6 +216,7 @@ Menu **Usuários** (somente administrador):
 | Relatórios (prévia e PDF) | ✅ | ✅ |
 | Devendo histórico e documentos (.docx) | ✅ | ✅ |
 | Ano letivo e calendário (Administração) | ✅ | ❌ |
+| Backup e restauração | ✅ | ❌ |
 | **Excluir qualquer dado** | ✅ | ❌ |
 | Gerenciar usuários | ✅ | ❌ |
 | Dados da escola (logo, nome, INEP) | ✅ | ❌ (só visualiza) |
@@ -237,7 +242,20 @@ O servidor é um só; os demais PCs acessam pelo navegador (nada é instalado ne
 
 ## 7. Backup e restauração
 
-Todo o dado viva em **duas pastas**: `data` (banco de dados e logo) e `pdfs` (históricos).
+Todo o dado vive em **duas pastas**: `data` (banco de dados e logo) e `pdfs` (históricos).
+
+### 7.1 Pelo próprio sistema (somente administrador)
+
+Menu **Backup** no lateral — só aparece para o administrador:
+
+- **Backup automático:** a cada dia de uso o sistema grava uma cópia do banco na pasta `backups\` e mantém os **últimos 30** (configurável em `config.json` → `backupManter`).
+- **Salvar agora:** cria um backup na hora, sem esperar o automático.
+- **Baixar:** baixa qualquer backup da lista como arquivo `.db` — guarde essa cópia em um pendrive ou nuvem, fora do computador da escola.
+- **Restaurar:** escolha a origem — *Arquivo do meu computador* (um `.db` baixado antes) ou *Backup guardado no servidor* — e confirme na janela. Antes de trocar os dados, o sistema salva o estado atual como `antes-restaurar-*` (para voltar atrás se preciso), **sua sessão é preservada** e a tela recarrega já com os dados do backup.
+
+> A restauração substitui **os dados do banco** (cadastros, matrículas, pedidos, usuários). Os PDFs em `pdfs\` **não são afetados** — para uma cópia completa use o método manual abaixo.
+
+### 7.2 Cópia manual completa (banco + PDFs)
 
 **Instalação via .exe:**
 ```
@@ -321,7 +339,7 @@ historico-escolar/
 │  └─ utils/            # cpf, data, texto, senha, arquivos, csv, dependências
 ├─ public/              # interface (index.html, js/app.js, css/styles.css)
 ├─ tests/
-│  ├─ smoke.test.js     # testes de API (72)
+│  ├─ smoke.test.js     # testes de API (77)
 │  └─ e2e/              # testes de interface Playwright (32, um arquivo por módulo)
 ├─ instalador/          # script do instalador + atalhos .vbs
 ├─ data/                # BANCO (não versionar)
@@ -331,8 +349,8 @@ historico-escolar/
 ### 9.6 Testes
 
 ```bat
-node --test tests/smoke.test.js   # testes de API (72)
-npx playwright test               # testes de interface (32; usa a porta 3100)
+node --test tests/smoke.test.js   # testes de API (77)
+npx playwright test               # testes de interface (37; usa a porta 3100)
 ```
 
 - Na primeira vez, instalar o navegador dos testes: `npx playwright install chromium`.

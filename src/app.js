@@ -20,6 +20,7 @@ const { rotasEncerramento } = require('./routes/encerramento');
 const { rotasMigracao } = require('./routes/migracao');
 const { rotasRenovacoes } = require('./routes/renovacoes');
 const { rotasSobre } = require('./routes/sobre');
+const { rotasBackup } = require('./routes/backup');
 
 const METODOS_SEGUROS = ['GET', 'HEAD', 'OPTIONS'];
 
@@ -64,6 +65,7 @@ function criarApp({ db, config }) {
   app.use('/api/relatorios', rotasRelatorios({ db, config }));
   app.use('/api/encerramento', rotasEncerramento({ db }));
   app.use('/api/migracao', exigirPerfil('admin'), rotasMigracao({ db }));
+  app.use('/api/backup', exigirPerfil('admin'), rotasBackup({ db, config }));
   app.use('/api/renovacoes', rotasRenovacoes({ db }));
   app.use('/api/sobre', rotasSobre({ config }));
 

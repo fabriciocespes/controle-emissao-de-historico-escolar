@@ -39,7 +39,7 @@ Name: "desktopicon"; Description: "Criar um ícone na área de trabalho"; GroupD
 ; caminho (data\* pegaria node_modules\pdfkit\js\data\, dist\* pegaria
 ; node_modules\fontkit\dist\...). Por isso node_modules vai numa entrada
 ; própria, com exclusões só de dev (Playwright).
-Source: "..\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs; Excludes: "node_modules\*,.git\*,.gitignore,.gitattributes,data\*,pdfs\*,tests\*,dist\*,instalador\*,temp_docx\*,planilhas\*,test-results\*,playwright-report\*,playwright.config.js,*.log,*.csv,*.pdf,*.db,listar-marcadores.js,testar-ficha.js,marcadores-lista.txt"
+Source: "..\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs; Excludes: "node_modules\*,backups\*,.git\*,.gitignore,.gitattributes,data\*,pdfs\*,tests\*,dist\*,instalador\*,temp_docx\*,planilhas\*,test-results\*,playwright-report\*,playwright.config.js,*.log,*.csv,*.pdf,*.db,listar-marcadores.js,testar-ficha.js,marcadores-lista.txt"
 Source: "..\node_modules\*"; DestDir: "{app}\node_modules"; Flags: ignoreversion recursesubdirs; Excludes: "@playwright\*,playwright\*,playwright-core\*,.bin\playwright*"
 Source: "C:\Program Files\nodejs\node.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Iniciar.vbs"; DestDir: "{app}"; Flags: ignoreversion

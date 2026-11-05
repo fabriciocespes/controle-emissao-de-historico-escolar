@@ -9,6 +9,7 @@ process.env.PDF_ROOT = path.join(temp, 'pdfs');
 process.env.DB_PATH = path.join(temp, 'banco', 'teste.db');
 process.env.LOGO_DIR = path.join(temp, 'logo');
 process.env.CALENDARIO_DIR = path.join(temp, 'calendario');
+process.env.BACKUP_DIR = path.join(temp, 'backups');
 
 const { lerConfig } = require('../src/config');
 const { abrirBanco } = require('../src/db');
@@ -4363,4 +4364,105 @@ test('importacao de CSV de alunos: linha invalida aborta e CPF duplicado e recus
     const excluido = await admin.enviar('DELETE', `/api/alunos/${item.id}`, { confirmar: true });
     assert.equal(excluido.status, 200, JSON.stringify(excluido.json));
   }
+});
+
+test('backup: restrito ao administrador, gera snapshot e baixa com assinatura SQLite', async () => {
+  const semSessao = new Cliente(base);
+  assert.equal((await semSessao.enviar('GET', '/api/backup')).status, 401);
+
+  const admin = new Cliente(base);
+  await admin.login('admin', 'admin123');
+
+  const criado = await admin.enviar('POST', '/api/usuarios', {
+    nome: 'Operadora Backup', login: 'opbackup', senha: 'segura123',
+    senha_confirmacao: 'segura123', perfil: 'operador',
+  });
+  assert.equal(criado.status, 201, JSON.stringify(criado.json));
+  const operadora = new Cliente(base);
+  assert.equal((await operadora.login('opbackup', 'segura123')).status, 200);
+  const proibido = await operadora.enviar('GET', '/api/backup');
+  assert.equal(proibido.status, 403, 'operador não vê o painel de backup');
+  assert.equal((await operadora.enviar('POST', '/api/backup/gerar', {})).status, 403);
+
+  const status = await admin.enviar('GET', '/api/backup');
+  assert.equal(status.status, 200, JSON.stringify(status.json));
+  assert.equal(typeof status.json.diretorio, 'string');
+  assert.equal(typeof status.json.manter, 'number');
+
+  const gerado = await admin.enviar('POST', '/api/backup/gerar', {});
+  assert.equal(gerado.status, 201, JSON.stringify(gerado.json));
+  assert.match(gerado.json.criado.arquivo, /^backup-\d{8}-\d{6}(-\d+)?\.db$/);
+  assert.ok(gerado.json.criado.tamanho > 0);
+  assert.ok(gerado.json.backups.some((b) => b.arquivo === gerado.json.criado.arquivo));
+
+  const download = await admin.enviar('GET', `/api/backup/baixar?arquivo=${encodeURIComponent(gerado.json.criado.arquivo)}`);
+  assert.equal(download.status, 200);
+  assert.ok(download.texto.startsWith('SQLite format 3'), 'conteúdo é um .db SQLite');
+  assert.match(download.headers.get('content-disposition'), /filename="backup-.*\.db"/);
+
+  // Sem ?arquivo baixa o mais recente; nome fora da listagem não existe.
+  const ultimo = await admin.enviar('GET', '/api/backup/baixar');
+  assert.equal(ultimo.status, 200);
+  const traversal = await admin.enviar('GET', '/api/backup/baixar?arquivo=..%2F..%2Fconfig.json');
+  assert.equal(traversal.status, 404);
+
+  // Upload que não é SQLite é recusado antes de tocar no banco.
+  const lixo = await admin.enviar('POST', '/api/backup/restaurar', {}, {
+    corpoBruto: Buffer.from('isto nao é um banco de dados sqlite '.repeat(4)),
+    contentType: 'application/octet-stream',
+  });
+  assert.equal(lixo.status, 400);
+  assert.match(lixo.json.erro, /SQLite/);
+});
+
+test('backup: restauração reverte dados e preserva a sessão do administrador', async () => {
+  const admin = new Cliente(base);
+  await admin.login('admin', 'admin123');
+
+  // 1) snapshot do estado atual (o marcador entra depois, para sumir na restauração)
+  const gerado = await admin.enviar('POST', '/api/backup/gerar', {});
+  assert.equal(gerado.status, 201, JSON.stringify(gerado.json));
+  const nome = gerado.json.criado.arquivo;
+
+  // 2) marcador: usuário criado DEPOIS do backup
+  const marcador = await admin.enviar('POST', '/api/usuarios', {
+    nome: 'Operadora Restauração', login: 'oprestore', senha: 'segura123',
+    senha_confirmacao: 'segura123', perfil: 'operador',
+  });
+  assert.equal(marcador.status, 201, JSON.stringify(marcador.json));
+  const operadora = new Cliente(base);
+  assert.equal((await operadora.login('oprestore', 'segura123')).status, 200);
+
+  const antes = await admin.enviar('GET', '/api/usuarios');
+  assert.ok(antes.json.some((u) => u.login === 'oprestore'), 'marcador presente antes de restaurar');
+
+  // 3) restaura o backup enviado como arquivo bruto
+  const bytes = fs.readFileSync(path.join(config.backupDirAbs, nome));
+  const restaurado = await admin.enviar('POST', '/api/backup/restaurar', {}, {
+    corpoBruto: bytes,
+    contentType: 'application/octet-stream',
+  });
+  assert.equal(restaurado.status, 200, JSON.stringify(restaurado.json));
+  assert.equal(restaurado.json.restaurado, true);
+  assert.equal(restaurado.json.sessaoPreservada, true);
+  assert.match(restaurado.json.salvaguarda, /^antes-restaurar-\d{8}-\d{6}(-\d+)?\.db$/);
+
+  // 4) dados revertidos…
+  const depois = await admin.enviar('GET', '/api/usuarios');
+  assert.equal(depois.status, 200, 'administrador continua logado após restaurar');
+  assert.ok(!depois.json.some((u) => u.login === 'oprestore'), 'marcador sumiu');
+
+  // …e o CSRF antigo ainda vale (prova de que a sessão foi re-injetada).
+  const gerarDepois = await admin.enviar('POST', '/api/backup/gerar', {});
+  assert.equal(gerarDepois.status, 201, 'token CSRF da sessão preservado');
+
+  // 5) a sessão criada depois do backup morreu junto com o dado.
+  const sessaoPerdida = await operadora.enviar('GET', '/api/usuarios');
+  assert.equal(sessaoPerdida.status, 401);
+  const loginPerdido = await operadora.login('oprestore', 'segura123');
+  assert.equal(loginPerdido.status, 401, 'usuário do marcador não existe mais');
+
+  // Restaurar a partir de arquivo que não está na listagem é recusado.
+  const inventado = await admin.enviar('POST', '/api/backup/restaurar-servidor', { arquivo: '..\\config.json' });
+  assert.equal(inventado.status, 400);
 });

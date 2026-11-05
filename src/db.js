@@ -540,4 +540,4 @@ function semearAdmin(db) {
   return { login, senha };
 }
 
-module.exports = { abrirBanco, SCHEMA, agora, dataBaseCenso, ehPosCenso, ehRetorno, marcarRetornos, recalcularPosCenso };
+module.exports = { abrirBanco, SCHEMA, migrar, semearAdmin, agora, dataBaseCenso, ehPosCenso, ehRetorno, marcarRetornos, recalcularPosCenso };

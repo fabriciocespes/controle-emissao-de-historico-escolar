@@ -82,6 +82,7 @@
       <p class="menu-grupo" id="grupo-configuracoes">Configurações</p>
       <button type="button" class="aba" data-painel="usuarios" id="aba-usuarios" hidden>Usuários <span class="badge ambar" id="badge-usuarios">0</span></button>
       <button type="button" class="aba" data-painel="administracao" id="aba-administracao" hidden>Administração</button>
+      <button type="button" class="aba" data-painel="backup" id="aba-backup" hidden>Backup</button>
     </nav>
 
     <div class="lateral-rodape">
@@ -596,6 +597,61 @@
           <button type="submit" class="btn primario">Salvar ano letivo</button>
         </div>
       </form>
+    </section>
+
+    <section class="painel" id="painel-backup" hidden>
+      <fieldset class="secao">
+        <legend>Backup do banco de dados</legend>
+        <p class="ajuda">O sistema guarda um backup automático do banco a cada dia de uso e mantém os últimos <b id="backup-manter">30</b>. Baixe uma cópia para guardar em um pendrive ou nuvem — é ela que você usaria para recuperar os cadastros em caso de problema com o computador.</p>
+        <p class="ajuda" id="backup-status">Carregando…</p>
+        <div class="tabela-rolagem">
+          <table>
+            <thead>
+              <tr>
+                <th>Arquivo</th>
+                <th>Data</th>
+                <th>Tamanho</th>
+                <th class="acao">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="corpo-backups"></tbody>
+          </table>
+        </div>
+        <p class="vazio" id="backup-vazio" hidden>Nenhum backup criado ainda.</p>
+        <div class="rodape">
+          <button type="button" class="btn primario" id="btn-gerar-backup">Salvar agora</button>
+        </div>
+      </fieldset>
+
+      <fieldset class="secao">
+        <legend>Restaurar backup</legend>
+        <p class="ajuda"><b>Atenção:</b> a restauração substitui <b>todos os dados atuais</b> pelos do backup escolhido (alunos, matrículas, pedidos, usuários). Antes de restaurar, o sistema salva uma cópia do estado atual como <code>antes-restaurar-*</code>, caso precise voltar atrás. Sua sessão é preservada — você continua logado.</p>
+        <div class="grade">
+          <label class="campo check">
+            <input type="radio" name="restaurar-origem" id="restaurar-opcao-arquivo" value="arquivo" checked>
+            <span>Arquivo do meu computador (.db)</span>
+          </label>
+          <label class="campo check">
+            <input type="radio" name="restaurar-origem" id="restaurar-opcao-servidor" value="servidor">
+            <span>Backup guardado no servidor</span>
+          </label>
+        </div>
+        <div class="grade" id="restaurar-bloco-arquivo">
+          <label class="campo">
+            <span>Arquivo de backup</span>
+            <input type="file" id="restaurar-arquivo" accept=".db,application/octet-stream">
+          </label>
+        </div>
+        <div class="grade" id="restaurar-bloco-servidor" hidden>
+          <label class="campo">
+            <span>Backup disponível</span>
+            <select id="restaurar-servidor"></select>
+          </label>
+        </div>
+        <div class="rodape">
+          <button type="button" class="btn perigo" id="btn-restaurar">Restaurar backup…</button>
+        </div>
+      </fieldset>
     </section>
 
     <section class="painel" id="painel-relatorios" hidden>

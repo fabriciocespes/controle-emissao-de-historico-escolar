@@ -20,8 +20,12 @@ function lerConfig() {
     dbPath: process.env.DB_PATH || base.dbPath || './data/historicos.db',
     logoDir: process.env.LOGO_DIR || base.logoDir || './data/logo',
     calendarioDir: process.env.CALENDARIO_DIR || base.calendarioDir || './data/calendarios',
+    backupDir: process.env.BACKUP_DIR || base.backupDir || './backups',
     raizProjeto: RAIZ_PROJETO,
   };
+
+  const manter = Number(process.env.BACKUP_MANTER ?? base.backupManter ?? 30);
+  config.backupManter = Number.isFinite(manter) && manter >= 0 ? manter : 30;
 
   config.pdfRootAbs = path.isAbsolute(config.pdfRoot)
     ? path.resolve(config.pdfRoot)
@@ -38,6 +42,10 @@ function lerConfig() {
   config.dbAbs = path.isAbsolute(config.dbPath)
     ? path.resolve(config.dbPath)
     : path.resolve(RAIZ_PROJETO, config.dbPath);
+
+  config.backupDirAbs = path.isAbsolute(config.backupDir)
+    ? path.resolve(config.backupDir)
+    : path.resolve(RAIZ_PROJETO, config.backupDir);
 
   return config;
 }

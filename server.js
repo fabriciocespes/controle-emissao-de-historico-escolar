@@ -3,6 +3,7 @@ const path = require('node:path');
 const { lerConfig } = require('./src/config');
 const { abrirBanco } = require('./src/db');
 const { criarApp } = require('./src/app');
+const { agendarBackupAutomatico } = require('./src/services/backup');
 
 const config = lerConfig();
 
@@ -11,6 +12,9 @@ fs.mkdirSync(path.dirname(config.dbAbs), { recursive: true });
 
 const { db, adminInicial } = abrirBanco(config.dbAbs);
 const app = criarApp({ db, config });
+
+// Backup automático diário para a pasta de backups (mantém os N mais recentes).
+agendarBackupAutomatico({ db, config });
 
 const servidor = app.listen(config.port, config.host, () => {
   console.log(`Histórico Escolar rodando em http://${config.host}:${config.port}`);
