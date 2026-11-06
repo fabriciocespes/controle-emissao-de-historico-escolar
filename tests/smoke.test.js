@@ -16,6 +16,8 @@ const { abrirBanco } = require('../src/db');
 const { criarApp } = require('../src/app');
 const { validarCPF, formatarCPF } = require('../src/utils/cpf');
 const { COLUNAS_CSV } = require('../src/routes/alunos');
+const { COLUNAS: COLUNAS_FUNCIONARIOS } = require('../src/routes/funcionarios');
+const { parseCsv } = require('../src/utils/csv');
 
 const config = lerConfig();
 let servidor;
@@ -54,6 +56,13 @@ class Cliente {
       const valor = par.slice(corte + 1);
       if (valor === '') this.cookies.delete(chave);
       else this.cookies.set(chave, valor);
+    }
+
+    // opcoes.binario: devolve os bytes cru (resposta.text() decodifica em
+    // UTF-8 e remove o BOM — impossível assertar o BOM do CSV sem o Buffer).
+    if (opcoes.binario) {
+      const buffer = Buffer.from(await resposta.arrayBuffer());
+      return { status: resposta.status, headers: resposta.headers, buffer, texto: null, json: null };
     }
 
     const texto = await resposta.text();
@@ -4465,4 +4474,414 @@ test('backup: restauração reverte dados e preserva a sessão do administrador'
   // Restaurar a partir de arquivo que não está na listagem é recusado.
   const inventado = await admin.enviar('POST', '/api/backup/restaurar-servidor', { arquivo: '..\\config.json' });
   assert.equal(inventado.status, 400);
+});
+
+/* ---------------- exportação CSV, declarações em lote e painel inicial ---------------- */
+
+test('exportacao CSV de alunos: BOM, cabecalho, datas e round-trip pelo import', async () => {
+  const admin = new Cliente(base);
+  await admin.login('admin', 'admin123');
+
+  const cpf = cpfNovo('985000001');
+  const aluno = await admin.enviar('POST', '/api/alunos', alunoCadastro({
+    nome: 'Aluno Exportacao CSV Teste',
+    cpf,
+    data_nascimento: '2015-04-15',
+    ue_origem: 'EMEF Origem Export',
+    devendo_historico: 'sim',
+    def_dv_cego: 'Sim',
+    codigo_cid: 'H54',
+    outros_laudos: 'Laudo oftalmologico',
+    tem_condicao: 'Sim',
+  }));
+  assert.equal(aluno.status, 201, JSON.stringify(aluno.json));
+
+  try {
+    const exportado = await admin.enviar('GET', '/api/alunos/exportar', undefined, { binario: true });
+    assert.equal(exportado.status, 200);
+    assert.deepEqual(
+      exportado.buffer.subarray(0, 3), Buffer.from([0xef, 0xbb, 0xbf]),
+      'o CSV comeca com BOM UTF-8'
+    );
+    assert.match(exportado.headers.get('content-type') || '', /text\/csv/);
+    assert.match(exportado.headers.get('content-disposition') || '', /filename="alunos-.+\.csv"/);
+
+    // parseCsv (o mesmo da importação) já remove o BOM.
+    const linhas = parseCsv(exportado.buffer.toString('utf8'), ';')
+      .filter((l) => l.some((c) => c.trim() !== ''));
+    assert.equal(linhas[0].join(';'), COLUNAS_CSV.join(';'), 'cabecalho identico ao do import');
+
+    const col = (nome) => COLUNAS_CSV.indexOf(nome);
+    const minha = linhas.find((l, i) => i > 0 && l[col('cpf')] === cpf.replace(/\D/g, ''));
+    assert.ok(minha, 'linha do aluno exportada (CPF em digitos no banco)');
+    assert.equal(minha[col('nome')], 'Aluno Exportacao CSV Teste');
+    assert.equal(minha[col('data_nascimento')], '15/04/2015', 'data convertida para dd/mm/aaaa');
+    assert.equal(minha[col('rg_data_emissao')], '', 'data vazia permanece vazia');
+    assert.equal(minha[col('devendo_historico')], 'sim', 'flag normalizada para sim/nao');
+    assert.equal(minha[col('deficiencias')], 'dv_cego', 'deficiencia como lista de slugs');
+
+    // Round-trip: a propria linha exportada volta a entrar pelo import — com
+    // CPF novo (o original ja existe) e os campos de condicao preservados.
+    const novoCpf = cpfNovo('985000002');
+    const linhaNova = [...minha];
+    linhaNova[col('cpf')] = novoCpf;
+    const csv = [COLUNAS_CSV.join(';'), linhaNova.join(';')].join('\r\n');
+    const importado = await importarAlunosCsv(admin, csv);
+    assert.equal(importado.status, 201, JSON.stringify(importado.json));
+    assert.equal(importado.json.importados, 1);
+
+    const busca = await admin.enviar('GET', `/api/alunos?q=${novoCpf.replace(/\D/g, '')}`);
+    assert.equal(busca.json.total, 1, 'aluno importado encontrado pelo CPF novo');
+    const detalhe = await admin.enviar('GET', `/api/alunos/${busca.json.itens[0].id}`);
+    assert.equal(detalhe.status, 200);
+    assert.equal(detalhe.json.data_nascimento, '2015-04-15', 'data convertida de volta para AAAA-MM-DD');
+    assert.equal(detalhe.json.devendo_historico, 'sim', 'devendo preservado no round-trip');
+    assert.equal(detalhe.json.deficiencias, 'dv_cego', 'deficiencia preservada');
+    assert.equal(detalhe.json.codigo_cid, 'H54', 'CID preservado (tem_condicao automatico no import)');
+    assert.equal(detalhe.json.outros_laudos, 'Laudo oftalmologico', 'laudo preservado');
+  } finally {
+    const busca = await admin.enviar('GET', '/api/alunos?q=Exportacao CSV Teste');
+    for (const item of busca.json.itens || []) {
+      await admin.enviar('DELETE', `/api/alunos/${item.id}`, { confirmar: true });
+    }
+  }
+});
+
+test('exportacao CSV de funcionarios: BOM, datas, acumulacao e round-trip', async () => {
+  const admin = new Cliente(base);
+  await admin.login('admin', 'admin123');
+
+  const funcionario = await admin.enviar('POST', '/api/funcionarios', funcionarioCadastro({
+    nome: 'Funcionario Exportacao Teste',
+    data_nascimento: '1988-03-15',
+    data_admissao: '2026-01-10',
+  }));
+  assert.equal(funcionario.status, 201, JSON.stringify(funcionario.json));
+
+  try {
+    const exportado = await admin.enviar('GET', '/api/funcionarios/exportar', undefined, { binario: true });
+    assert.equal(exportado.status, 200);
+    assert.deepEqual(
+      exportado.buffer.subarray(0, 3), Buffer.from([0xef, 0xbb, 0xbf]),
+      'o CSV comeca com BOM UTF-8'
+    );
+    assert.match(exportado.headers.get('content-disposition') || '', /filename="funcionarios-.+\.csv"/);
+
+    const linhas = parseCsv(exportado.buffer.toString('utf8'), ';')
+      .filter((l) => l.some((c) => c.trim() !== ''));
+    assert.equal(linhas[0].join(';'), COLUNAS_FUNCIONARIOS.join(';'), 'cabecalho identico ao do import');
+
+    const col = (nome) => COLUNAS_FUNCIONARIOS.indexOf(nome);
+    const minha = linhas.find((l, i) => i > 0 && l[col('nome')] === 'Funcionario Exportacao Teste');
+    assert.ok(minha, 'linha do funcionario exportada');
+    assert.equal(minha[col('cpf')], '52998224725', 'CPF em digitos, sem mascara');
+    assert.equal(minha[col('data_nascimento')], '15/03/1988', 'data convertida para dd/mm/aaaa');
+    assert.equal(minha[col('data_admissao')], '10/01/2026', 'admissao em dd/mm/aaaa');
+    assert.equal(minha[col('acumulacao_cargo')], 'nao', 'acumulacao como sim/nao');
+
+    // Round-trip: a linha exportada volta a entrar com matricula nova.
+    const linhaNova = [...minha];
+    linhaNova[col('matricula')] = 'EXP-EXPORT-1';
+    linhaNova[col('nome')] = 'Funcionario Exportacao Importado';
+    const csv = [COLUNAS_FUNCIONARIOS.join(';'), linhaNova.join(';')].join('\r\n');
+    const importado = await admin.enviar('POST', '/api/funcionarios/importar', undefined, {
+      corpoBruto: csv,
+      contentType: 'text/csv',
+    });
+    assert.equal(importado.status, 201, JSON.stringify(importado.json));
+    assert.equal(importado.json.importados, 1);
+
+    const busca = await admin.enviar('GET', '/api/funcionarios?q=Exportacao Importado');
+    assert.ok((busca.json.itens || []).some((f) => f.matricula === 'EXP-EXPORT-1'),
+      'funcionario importado encontrado pela matricula nova');
+  } finally {
+    const busca = await admin.enviar('GET', '/api/funcionarios?q=Exportacao');
+    for (const item of busca.json.itens || []) {
+      await admin.enviar('DELETE', `/api/funcionarios/${item.id}`, { confirmar: true });
+    }
+  }
+});
+
+// CRC-32 (polinomio 0xEDB88320) calculado no teste para conferir o central
+// directory do ZIP gerado pelo src/utils/zip.js.
+function crc32Teste(dados) {
+  let crc = -1;
+  for (let i = 0; i < dados.length; i += 1) {
+    crc ^= dados[i];
+    for (let k = 0; k < 8; k += 1) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+  }
+  return (crc ^ -1) >>> 0;
+}
+
+// Lê o ZIP pelo CENTRAL DIRECTORY (não pela sequência de local headers):
+// valida assinaturas, extrai cada entrada pelo deslocamento do próprio
+// central e devolve nome/método/CRC/dados.
+function lerZipTeste(buffer) {
+  let eocd = -1;
+  for (let i = buffer.length - 22; i >= 0; i -= 1) {
+    if (buffer.readUInt32LE(i) === 0x06054b50) { eocd = i; break; }
+  }
+  assert.ok(eocd >= 0, 'ZIP termina com EOCD');
+  const total = buffer.readUInt16LE(eocd + 10);
+  let p = buffer.readUInt32LE(eocd + 16);
+  const entradas = [];
+  for (let n = 0; n < total; n += 1) {
+    assert.equal(buffer.readUInt32LE(p), 0x02014b50, 'entrada do central directory valida');
+    const metodo = buffer.readUInt16LE(p + 10);
+    const crc = buffer.readUInt32LE(p + 16);
+    const tam = buffer.readUInt32LE(p + 20);
+    const nomeTam = buffer.readUInt16LE(p + 28);
+    const extraTam = buffer.readUInt16LE(p + 30);
+    const comentTam = buffer.readUInt16LE(p + 32);
+    const desloc = buffer.readUInt32LE(p + 42);
+    const nome = buffer.slice(p + 46, p + 46 + nomeTam).toString('utf8');
+
+    assert.equal(buffer.readUInt32LE(desloc), 0x04034b50, 'local header coerente com o central');
+    const lNome = buffer.readUInt16LE(desloc + 26);
+    const lExtra = buffer.readUInt16LE(desloc + 28);
+    const inicio = desloc + 30 + lNome + lExtra;
+    const dados = buffer.slice(inicio, inicio + tam);
+    entradas.push({ nome, metodo, crc, dados });
+    p += 46 + nomeTam + extraTam + comentTam;
+  }
+  assert.equal(p, buffer.readUInt32LE(eocd + 16) + buffer.readUInt32LE(eocd + 12),
+    'percorreu o central directory inteiro');
+  return entradas;
+}
+
+test('declaracoes em lote da turma: ZIP com .docx por aluno e omissoes com motivo', async () => {
+  const admin = new Cliente(base);
+  await admin.login('admin', 'admin123');
+  const ano = new Date().getFullYear();
+
+  const turma = await admin.enviar('POST', '/api/turmas', turmaCadastro({ sigla: 'LOT-01' }));
+  assert.equal(turma.status, 201, JSON.stringify(turma.json));
+  const turma2 = await admin.enviar('POST', '/api/turmas',
+    turmaCadastro({ sigla: 'LOT-02', ano_escolaridade: '4º ano' }));
+  assert.equal(turma2.status, 201, JSON.stringify(turma2.json));
+
+  const alunos = [];
+  try {
+    const matriculas = [];
+    for (const [i, nome] of ['Lote Aluno A', 'Lote Aluno B', 'Lote Aluno C'].entries()) {
+      const aluno = await admin.enviar('POST', '/api/alunos', alunoCadastro({
+        nome, cpf: cpfNovo(`98200000${i}`), filiacao1_cpf: '',
+      }));
+      assert.equal(aluno.status, 201, JSON.stringify(aluno.json));
+      alunos.push(aluno.json.id);
+      const m = await admin.enviar('POST', '/api/matriculas', {
+        aluno_id: aluno.json.id, turma_id: turma.json.id, data_inicio: `${ano}-02-10`,
+      });
+      assert.equal(m.status, 201, JSON.stringify(m.json));
+      matriculas.push(m.json.id);
+    }
+
+    // O aluno C passa a ser transferido: sai da Comprovação e entra na
+    // Transferência (é o único elegível do lote).
+    const transferida = await admin.enviar('POST', `/api/matriculas/${matriculas[2]}/transferir`, {
+      tipo: 'transferido_externo', data: `${ano}-06-01`, destino: 'Rede Municipal', motivo: '',
+    });
+    assert.equal(transferida.status, 200, JSON.stringify(transferida.json));
+
+    // Turma 2 com um aluno não transferido: serve para o caso de 400 (0 gerados).
+    const outro = await admin.enviar('POST', '/api/alunos', alunoCadastro({
+      nome: 'Lote Aluno D', cpf: cpfNovo('982000003'), filiacao1_cpf: '',
+    }));
+    assert.equal(outro.status, 201, JSON.stringify(outro.json));
+    alunos.push(outro.json.id);
+    const mOutro = await admin.enviar('POST', '/api/matriculas', {
+      aluno_id: outro.json.id, turma_id: turma2.json.id, data_inicio: `${ano}-02-10`,
+    });
+    assert.equal(mOutro.status, 201, JSON.stringify(mOutro.json));
+
+    // Parâmetros inválidos seguem valendo a mesma validação da rota única.
+    const tipoRuim = await admin.enviar('GET',
+      `/api/diario/turmas/${turma.json.id}/declaracoes?tipo=inventado&situacao=matriculado`);
+    assert.equal(tipoRuim.status, 400);
+    const cursouRuim = await admin.enviar('GET',
+      `/api/diario/turmas/${turma.json.id}/declaracoes?tipo=comprovacao&situacao=cursou`);
+    assert.equal(cursouRuim.status, 400, 'comprovacao nao admite cursou');
+
+    // ---- Comprovação: A e B geram; o transferido C é omitido com motivo.
+    const comprovacao = await admin.enviar('GET',
+      `/api/diario/turmas/${turma.json.id}/declaracoes?tipo=comprovacao&situacao=matriculado`,
+      undefined, { binario: true });
+    assert.equal(comprovacao.status, 200);
+    assert.match(comprovacao.headers.get('content-type') || '', /zip/);
+    assert.match(comprovacao.headers.get('content-disposition') || '',
+      /filename="declaracoes-lot-01-\d{4}\.zip"/);
+    assert.equal(comprovacao.headers.get('x-declaracoes-total'), '2');
+    assert.equal(comprovacao.headers.get('x-declaracoes-omitidos'), '1');
+    assert.deepEqual(
+      JSON.parse(decodeURIComponent(comprovacao.headers.get('x-declaracoes-motivos'))),
+      ['Aluno transferido: apenas a Transferência pode ser emitida.']
+    );
+    assert.equal(comprovacao.buffer.subarray(0, 4).toString('latin1'), 'PK\x03\x04');
+
+    const entradasComv = lerZipTeste(comprovacao.buffer);
+    assert.equal(entradasComv.length, 2, 'um .docx por aluno elegivel');
+    for (const entrada of entradasComv) {
+      assert.match(entrada.nome, /^declaracao-escolar-lote-aluno-[ab]\.docx$/);
+      assert.equal(entrada.metodo, 0, 'ZIP em metodo stored (sem compressao)');
+      assert.equal(entrada.crc, crc32Teste(entrada.dados), 'CRC-32 do central directory confere');
+      assert.ok(entrada.dados.toString('utf8').includes('word/document.xml'),
+        'a entrada e um .docx valido');
+    }
+
+    // ---- Transferência: só o aluno C é elegível (2 omissões com motivo).
+    const transferencia = await admin.enviar('GET',
+      `/api/diario/turmas/${turma.json.id}/declaracoes?tipo=transferencia&situacao=matriculado`,
+      undefined, { binario: true });
+    assert.equal(transferencia.status, 200);
+    assert.equal(transferencia.headers.get('x-declaracoes-total'), '1');
+    assert.equal(transferencia.headers.get('x-declaracoes-omitidos'), '2');
+    assert.deepEqual(
+      JSON.parse(decodeURIComponent(transferencia.headers.get('x-declaracoes-motivos'))),
+      ['Aluno não transferido: apenas a Comprovação de Escolaridade pode ser emitida.']
+    );
+    const entradasTransf = lerZipTeste(transferencia.buffer);
+    assert.equal(entradasTransf.length, 1);
+    assert.equal(entradasTransf[0].nome, 'declaracao-escolar-lote-aluno-c.docx');
+
+    // ---- Ninguém gera: 400 com os motivos agrupados por quantidade.
+    const nada = await admin.enviar('GET',
+      `/api/diario/turmas/${turma2.json.id}/declaracoes?tipo=transferencia&situacao=matriculado`);
+    assert.equal(nada.status, 400, JSON.stringify(nada.json));
+    assert.match(nada.json.erro, /Nenhuma declaração/);
+    assert.deepEqual(nada.json.motivos, [{
+      motivo: 'Aluno não transferido: apenas a Comprovação de Escolaridade pode ser emitida.',
+      quantidade: 1,
+    }]);
+
+    // Turma inexistente -> 404.
+    const sumida = await admin.enviar('GET',
+      '/api/diario/turmas/999999/declaracoes?tipo=comprovacao&situacao=matriculado');
+    assert.equal(sumida.status, 404);
+  } finally {
+    for (const turmaId of [turma.json.id, turma2.json.id]) {
+      await admin.enviar('DELETE', `/api/turmas/${turmaId}`, { confirmar: true });
+    }
+    for (const id of alunos) {
+      await admin.enviar('DELETE', `/api/alunos/${id}`, { confirmar: true });
+    }
+  }
+});
+
+test('painel inicial de pendencias: pedidos, devendo e renovacao do ano', async () => {
+  const admin = new Cliente(base);
+  await admin.login('admin', 'admin123');
+
+  const antes = await admin.enviar('GET', '/api/pendencias');
+  assert.equal(antes.status, 200, JSON.stringify(antes.json));
+  const base0 = antes.json;
+  assert.ok(Number.isInteger(base0.pedidos.aguardando_confeccao));
+  assert.ok(Number.isInteger(base0.pedidos.pronto));
+  assert.ok(Number.isInteger(base0.pedidos.entregue));
+  assert.ok(Number.isInteger(base0.devendo));
+  assert.ok(Number.isInteger(base0.renovacao.ano));
+  assert.equal(base0.renovacao.renovados + base0.renovacao.pendentes, base0.renovacao.total,
+    'renovados + pendentes = total');
+
+  const hoje = new Date().toISOString().slice(0, 10);
+
+  // ---- Pedidos: fila -> pronto -> entregue, um contador em cada passo.
+  const pedido = await admin.enviar('POST', '/api/pedidos', {
+    via: 1,
+    data_pedido: hoje,
+    responsavel_nome: 'Responsavel Painel Inicio',
+    responsavel_telefone: '(22) 99999-8888',
+    aluno_nome: 'Aluno Pedido Painel Inicio',
+    aluno_cpf: '529.982.247-25',
+  });
+  assert.equal(pedido.status, 201, JSON.stringify(pedido.json));
+
+  const comFila = (await admin.enviar('GET', '/api/pendencias')).json;
+  assert.equal(comFila.pedidos.aguardando_confeccao, base0.pedidos.aguardando_confeccao + 1,
+    'novo pedido entra na fila de confeccao');
+
+  const confeccao = await admin.enviar('POST', `/api/pedidos/${pedido.json.id}/confeccao`, {
+    data_confeccao: hoje, pdf_caminho: 'https://example.com/historico.pdf',
+  });
+  assert.equal(confeccao.status, 200, JSON.stringify(confeccao.json));
+
+  const comPronto = (await admin.enviar('GET', '/api/pendencias')).json;
+  assert.equal(comPronto.pedidos.aguardando_confeccao, base0.pedidos.aguardando_confeccao,
+    'saiu da fila de confeccao');
+  assert.equal(comPronto.pedidos.pronto, base0.pedidos.pronto + 1, 'entrou em prontos');
+
+  const entrega = await admin.enviar('POST', `/api/pedidos/${pedido.json.id}/entrega`, {
+    data_entrega: hoje,
+    entregue_nome: 'Responsavel Painel Inicio',
+    entregue_cpf: '529.982.247-25',
+  });
+  assert.equal(entrega.status, 200, JSON.stringify(entrega.json));
+
+  const comEntregue = (await admin.enviar('GET', '/api/pendencias')).json;
+  assert.equal(comEntregue.pedidos.pronto, base0.pedidos.pronto, 'saiu de prontos');
+  assert.equal(comEntregue.pedidos.entregue, base0.pedidos.entregue + 1, 'entrou em entregues');
+
+  // ---- Devendo histórico: cria sobe, apagar volta ao patamar inicial.
+  const devendo = await admin.enviar('POST', '/api/devendo-historico', {
+    aluno_nome: 'Aluno Devendo Painel Inicio',
+    unidade_escolar_anterior: 'EMEF Painel Inicio',
+  });
+  assert.equal(devendo.status, 201, JSON.stringify(devendo.json));
+
+  const comDevendo = (await admin.enviar('GET', '/api/pendencias')).json;
+  assert.equal(comDevendo.devendo, base0.devendo + 1, 'novo devendo aparece no painel');
+
+  const apagado = await admin.enviar('DELETE', `/api/devendo-historico/${devendo.json.id}`);
+  assert.equal(apagado.status, 200);
+
+  const semDevendo = (await admin.enviar('GET', '/api/pendencias')).json;
+  assert.equal(semDevendo.devendo, base0.devendo, 'devendo volta ao patamar inicial');
+
+  // ---- Renovação: matrícula sem registro sobe pendentes; registrar derruba.
+  const ano = base0.renovacao.ano;
+  const turma = await admin.enviar('POST', '/api/turmas',
+    turmaCadastro({ sigla: 'PEN-01', ano_letivo: ano }));
+  assert.equal(turma.status, 201, JSON.stringify(turma.json));
+
+  const alunos = [];
+  try {
+    const aluno = await admin.enviar('POST', '/api/alunos', alunoCadastro({
+      nome: 'Aluno Renovacao Painel Inicio',
+      cpf: cpfNovo('985000010'),
+      filiacao1_cpf: '',
+    }));
+    assert.equal(aluno.status, 201, JSON.stringify(aluno.json));
+    alunos.push(aluno.json.id);
+
+    const matricula = await admin.enviar('POST', '/api/matriculas', {
+      aluno_id: aluno.json.id, turma_id: turma.json.id, data_inicio: `${ano}-02-10`,
+    });
+    assert.equal(matricula.status, 201, JSON.stringify(matricula.json));
+
+    const comAluno = (await admin.enviar('GET', '/api/pendencias')).json;
+    assert.equal(comAluno.renovacao.total, base0.renovacao.total + 1, 'aluno conta no total');
+    assert.equal(comAluno.renovacao.renovados, base0.renovacao.renovados, 'nada renovou ainda');
+    assert.equal(comAluno.renovacao.pendentes, base0.renovacao.pendentes + 1, 'pendente no painel');
+
+    const renovado = await admin.enviar('POST', '/api/renovacoes', {
+      aluno_id: aluno.json.id, ano_letivo: ano, data: hoje,
+    });
+    assert.equal(renovado.status, 201, JSON.stringify(renovado.json));
+
+    const comRenovacao = (await admin.enviar('GET', '/api/pendencias')).json;
+    assert.equal(comRenovacao.renovacao.renovados, base0.renovacao.renovados + 1, 'renovou contou');
+    assert.equal(comRenovacao.renovacao.pendentes, base0.renovacao.pendentes, 'pendente saiu');
+    assert.equal(comRenovacao.renovacao.total, comAluno.renovacao.total, 'total nao muda');
+
+    // Renovação de volta ao painel fica refletida no "n de total".
+    assert.match(
+      `${comRenovacao.renovacao.renovados}/${comRenovacao.renovacao.total}`,
+      /^\d+\/\d+$/
+    );
+  } finally {
+    await admin.enviar('DELETE', `/api/renovacoes/${alunos[0] || 0}?ano_letivo=${ano}`);
+    await admin.enviar('DELETE', `/api/turmas/${turma.json.id}`, { confirmar: true });
+    for (const id of alunos) {
+      await admin.enviar('DELETE', `/api/alunos/${id}`, { confirmar: true });
+    }
+  }
 });

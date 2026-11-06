@@ -11,8 +11,10 @@ Aplicação local para controlar a emissão e entrega de Históricos Escolar de 
 - **Filas de trabalho:** *A confeccionar* → *Prontos* → *Entregues*, mais a aba **Devendo Histórico**
 - Anexo do PDF do histórico (pelo explorador do Windows)
 - **Cadastros** de alunos (CPF validado, filiação, responsável, deficiências/CID), funcionários/professores e turmas
+- **Exportação CSV** dos alunos e dos funcionários (mesmo layout da importação — abre no Excel e volta a importar sem ajustes)
+- **Tela inicial com as pendências do dia** (filas, devendo histórico e renovação de matrícula)
 - **Enturmações:** matrícula individual ou em lote, Diário da turma e alocação de professores por período
-- **Documentos em Word (.docx):** Ficha de Matrícula e Declaração Escolar, gerados a partir dos modelos oficiais
+- **Documentos em Word (.docx):** Ficha de Matrícula e Declaração Escolar (individual ou **em lote da turma, em ZIP**), gerados a partir dos modelos oficiais
 - **Relatórios** com prévia em tela e geração de PDF (Matrículas Pós-Censo, Quadro de Turmas, Mapa de Alunos…)
 - **Encerramento do ano letivo:** fechar/reabrir turma registrando a situação final de cada aluno
 - **Calendário do ano letivo** (PDF anexado pelo administrador)
@@ -63,6 +65,22 @@ Aplicação local para controlar a emissão e entrega de Históricos Escolar de 
 ---
 
 ## 4. Funcionamento dia a dia
+
+### 4.0 Início: painel de pendências (tela inicial)
+
+Ao entrar no sistema a primeira tela é o **Início** (também acessível pelo botão **Início** no topo do menu). É o resumo do dia, com cinco cartões:
+
+| Cartão | Mostra | Clique leva para |
+|---|---|---|
+| **A confeccionar** | Pedidos aguardando gerar o PDF | aba *A confeccionar* |
+| **Prontos** | Históricos aguardando retirada | aba *Prontos* |
+| **Entregues** | Pedidos já entregues | aba *Entregues* |
+| **Devendo histórico** | Alunos com histórico pendente | aba *Devendo Histórico* |
+| **Renovação de matrícula** | Alunos do ano de referência **sem** renovação (com o detalhe "*X de Y renovados · ano AAAA*") | aba *Renovar matrícula* |
+
+- Os números são atualizados a cada abertura da tela; **clique em qualquer cartão** abre a tela correspondente.
+- **Renovação:** o ano exibido é o do período letivo vigente (hoje entre as datas de início e término em *Administração*); fora do período, o ano corrente.
+- Disponível para administrador e operador.
 
 ### 4.1 Cabeçalho da escola (acima do menu)
 
@@ -123,12 +141,13 @@ Aba **Devendo Histórico**: alunos que ficaram com um histórico em pendência (
 
 | Aba | O que se cadastra | Ações |
 |---|---|---|
-| **Alunos** | Identificação, filiação 1 e 2, responsável, endereço, deficiências/transtornos, dados escolares anteriores | **+ Novo aluno**, **Importar CSV**, busca, Ver/Editar/Excluir¹ |
-| **Funcionários** | Professores e demais servidores: cargo, função, admissão, formação, situação | **+ Novo funcionário**, **Importar CSV**, busca, Editar/Excluir¹ |
+| **Alunos** | Identificação, filiação 1 e 2, responsável, endereço, deficiências/transtornos, dados escolares anteriores | **+ Novo aluno**, **Importar CSV**, **Exportar CSV**, busca, Ver/Editar/Excluir¹ |
+| **Funcionários** | Professores e demais servidores: cargo, função, admissão, formação, situação | **+ Novo funcionário**, **Importar CSV**, **Exportar CSV**, busca, Editar/Excluir¹ |
 | **Turmas** | Ano letivo, matriz (Educação Infantil, EF Anos Iniciais, EF Anos Finais), ano de escolaridade, sigla, turno e tipo (NAI/NAF) | **+ Nova turma**, busca, Editar/Excluir¹ |
 
 - O **CPF é validado** (precisa ser um CPF real); aluno e funcionário são buscados por nome, CPF ou matrícula.
 - **Importar CSV (Alunos e Funcionários):** o botão abre o seletor de arquivo e cada linha vira um cadastro. O arquivo precisa ter o **cabeçalho exato do modelo** (mesmos nomes, na mesma ordem — use o arquivo modelo `modelo-importacao-alunos.csv`, que já vem com uma linha de exemplo para apagar; **no sistema instalado os dois modelos em branco** — Alunos e Funcionários — **estão na pasta `planilhas\` da instalação**). No Alunos: datas em **dd/mm/aaaa**, campos de pergunta em **Sim/Não** e *devendo histórico* em `sim`/`nao`; aceita separador **ponto-e-vírgula** (padrão) ou **vírgula** (Excel em outro locale) e arquivos em UTF-8 ou ANSI. A importação é **tudo-ou-nada**: havendo qualquer problema, o sistema lista **linha a linha** o que corrigir e **nada é inserido**; CPF já cadastrado ou repetido no próprio arquivo também vira erro de linha.
+- **Exportar CSV (Alunos e Funcionários):** o botão baixa `alunos-AAAA-MM-DD.csv` / `funcionarios-AAAA-MM-DD.csv` com **todos os campos** na mesma ordem da importação (cabeçalho exato, separador **;** e acentuação correta — o arquivo começa com BOM UTF-8, que o Excel respeita e a importação ignora). Datas saem em **dd/mm/aaaa**, *devendo histórico* em `sim`/`nao`, *deficiências* como lista (`dv_cego | outros`) e *acumulação de cargo* em `sim`/`nao`. **O arquivo exportado volta a importar sem nenhum ajuste** (round-trip) — é a forma de fazer uma cópia de segurança dos cadastros em planilha.
 - Na **visualização do aluno** (olho da lista), a **turma da matrícula vigente** aparece como primeira linha do início da tela, logo antes da *Situação atual* — com sigla, série, turno e ano letivo. Aluno sem matrícula ativa não exibe a linha (a situação já indica o motivo).
 - A **sigla da turma é única dentro do ano letivo** — o sistema recusa a duplicata na criação e na edição.
 - Turmas já encerradas aparecem com a etiqueta **Fechada** (ver seção 4.10).
@@ -137,7 +156,7 @@ Aba **Devendo Histórico**: alunos que ficaram com um histórico em pendência (
 ### 4.9 Enturmações (Matrícula, Diário e Professor)
 
 - **Matrícula:** matricule alunos existentes (busca + **Matricular selecionados** para vários de uma vez, em lote) ou cadastre um aluno novo já com matrícula (**+ Inserir Aluno Novo**). A matrícula gera **número automático** e impede o mesmo aluno duas vezes na mesma turma. Alunos matriculados após a Data Base CENSO ficam marcados como **Matriculado pós-censo**.
-- **Diário:** escolha ano letivo e turma para ver os alunos em ordem alfabética com a situação (matriculado, transferido, deixou de frequentar, pós-censo, retorno). Daqui saem as ações de **transferir**, **deixou de frequentar** e **desfazer**, o botão **Gerar Ficha Matrícula** (Word) e a remoção do aluno da turma (devolve à lista de matrícula).
+- **Diário:** escolha ano letivo e turma para ver os alunos em ordem alfabética com a situação (matriculado, transferido, deixou de frequentar, pós-censo, retorno). Daqui saem as ações de **transferir**, **deixou de frequentar** e **desfazer**, o botão **Gerar Ficha Matrícula** (Word), o botão **Declarações em lote (.zip)** (seção 4.12) e a remoção do aluno da turma (devolve à lista de matrícula). O botão de lote só aparece depois que a turma é escolhida.
 - **Professor (alocação):** associe professores às turmas com **período (início e fim)**. O sistema **impede conflito de turno** para a mesma pessoa (CPF) e exige data de inativação para inativar um professor alocado. Exclusão da alocação: administrador.
 
 ### 4.10 Ano letivo: Calendário, Fechar, Reabrir, Migrar e Renovar
@@ -175,6 +194,7 @@ Escolha um **modelo pronto** (Matrículas Pós-Censo, Quadro de Turmas, Mapa de 
 
 - **Ficha de Matrícula:** no **Diário**, junto às ações do aluno — preenche o formulário oficial com os dados do aluno e baixa o `.docx`.
 - **Declaração Escolar:** na visualização do aluno (**Ver aluno**), botão **Gerar Declaração** — tipos *Comprovação de Escolaridade* e *Transferência*, com situação e situação final; o sistema valida o que combinam com a situação da matrícula, preenche o modelo oficial e baixa o `.docx`. Só aparece para aluno com matrícula.
+- **Declarações em lote (ZIP):** no **Diário**, botão **Declarações em lote (.zip)** gera **um `.docx` por aluno da turma**, empacotado em `declaracoes-<turma>-<ano>.zip`. A modal é a mesma da declaração única (título *Declarações da turma (.zip)*, botão **Baixar ZIP**), mas **os dois tipos ficam disponíveis** — o servidor decide aluno a aluno: **transferido só sai na Transferência** e **não transferido só sai na Comprovação de Escolaridade**. Quem não cabe é **omitido com motivo**, e o aviso pós-download informa "*X declaração(ões) gerada(s) no ZIP*" e "*Y aluno(s) omitido(s)*" com o motivo de cada grupo. Se **ninguém** gerar, nada é baixado: aparece o erro com os motivos agrupados ("*N× motivo*").
 
 ### 4.13 Administração (somente administrador)
 
@@ -209,7 +229,10 @@ Menu **Usuários** (somente administrador):
 | Marcar confecção / entrega | ✅ | ✅ |
 | Ver PDFs / buscar | ✅ | ✅ |
 | Cadastros (alunos, funcionários, turmas) | ✅ | ✅ |
+| Importar / exportar CSV | ✅ | ✅ |
 | Matrículas, Diário e alocação de professores | ✅ | ✅ |
+| Declarações (individual e em lote por turma) | ✅ | ✅ |
+| Painel inicial de pendências | ✅ | ✅ |
 | Fechar / Reabrir ano letivo | ✅ | ✅ |
 | Migrar alunos para o novo ano | ✅ | ❌ |
 | Renovar matrícula | ✅ | ✅ |
@@ -349,13 +372,13 @@ historico-escolar/
 ### 9.6 Testes
 
 ```bat
-node --test tests/smoke.test.js   # testes de API (77)
-npx playwright test               # testes de interface (37; usa a porta 3100)
+node --test tests/smoke.test.js   # testes de API (81)
+npx playwright test               # testes de interface (40; usa a porta 3100)
 ```
 
 - Na primeira vez, instalar o navegador dos testes: `npx playwright install chromium`.
 - `npm test` roda a descoberta padrão do Node (`node --test`).
-- Cobrem: login/permissões, pedidos e regra de datas, cadastros, CSV, matrículas e lote, diário, transferências/retornos, pós-censo, alocação de professores, documentos em Word (ficha e declaração), relatórios (prévia e PDF), **encerramento do ano letivo**, **migração em lote para o novo ano** e o rodapé **Sobre**.
+- Cobrem: login/permissões, pedidos e regra de datas, cadastros, **importação e exportação CSV** (round-trip), matrículas e lote, diário, **declarações em lote (ZIP)**, transferências/retornos, pós-censo, alocação de professores, documentos em Word (ficha e declaração), relatórios (prévia e PDF), **encerramento do ano letivo**, **migração em lote para o novo ano**, **painel inicial de pendências** e o rodapé **Sobre**.
 - Os testes de interface sobem o próprio servidor E2E em `localhost:3100` com banco temporário — deixe a porta 3100 livre.
 
 ---
@@ -375,4 +398,4 @@ npx playwright test               # testes de interface (37; usa a porta 3100)
 
 ---
 
-*Documento do sistema — Histórico Escolar. Versão 1.0 — atualizado em 29/10/2026. Desenvolvido por Fabrício Cespes.*
+*Documento do sistema - Histórico Escolar. Versão 1.0 - atualizado em 06/11/2026. Desenvolvido por Fabrício Cespes.*

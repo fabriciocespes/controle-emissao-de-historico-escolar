@@ -5,7 +5,7 @@ const { normalizar } = require('../utils/texto');
 const { agora } = require('../db');
 const { exigirPerfil } = require('../auth');
 const { emTransacao } = require('../utils/dependencias');
-const { parseCsv } = require('../utils/csv');
+const { parseCsv, celulaCsv } = require('../utils/csv');
 
 const POR_PAGINA = 50;
 
@@ -637,6 +637,47 @@ function rotasAlunos({ db }) {
     return resposta.json({ itens, total, pagina, limite });
   });
 
+  // Exportação CSV: mesmo layout da importação (COLUNAS_CSV + separador ";"),
+  // datas em dd/mm/aaaa (formato do Excel pt-BR), deficiências como lista
+  // "dv_cego | outros" e BOM UTF-8 no início — o Excel abre acentos direto e
+  // o import já remove o BOM (parseCsv). Round-trip: o arquivo exportado
+  // volta a entrar por POST /importar sem nenhum ajuste manual.
+  roteador.get('/exportar', (requisicao, resposta) => {
+    // "devendo_historico" não é coluna de "alunos" — vem da tabela própria
+    // (última linha do aluno), igual ao SELECT da listagem; sem linha, "nao".
+    const colunasTabela = COLUNAS_CSV.filter((c) => c !== 'devendo_historico');
+    const linhas = db
+      .prepare(
+        `SELECT ${colunasTabela.join(', ')},
+                (SELECT dh.status FROM devendo_historico dh
+                  WHERE dh.aluno_id = alunos.id
+                  ORDER BY dh.id DESC LIMIT 1) AS devendo_historico
+           FROM alunos ORDER BY nome ASC, id ASC`
+      )
+      .all();
+
+    const corpo = [
+      COLUNAS_CSV.join(';'),
+      ...linhas.map((linha) =>
+        COLUNAS_CSV.map((coluna) => {
+          let valor = linha[coluna];
+          if (DATAS_CSV.includes(coluna)) {
+            valor = validarData(valor) ? formatarDataBR(valor) : valor;
+          } else if (coluna === 'devendo_historico') {
+            valor = normalizarSimNao(valor) || 'nao';
+          } else if (coluna === 'deficiencias') {
+            valor = String(valor || '').split('|').map((m) => m.trim()).filter(Boolean).join(' | ');
+          }
+          return celulaCsv(valor);
+        }).join(';')
+      ),
+    ].join('\r\n');
+
+    resposta.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    resposta.setHeader('Content-Disposition', `attachment; filename="alunos-${dataLocal()}.csv"`);
+    return resposta.end(`\uFEFF${corpo}\r\n`);
+  });
+
   roteador.get('/:id(\\d+)', (requisicao, resposta) => {
     const linha = buscarAluno(Number(requisicao.params.id));
     if (!linha) return resposta.status(404).json({ erro: 'Aluno não encontrado.' });
@@ -713,7 +754,9 @@ function rotasAlunos({ db }) {
 
         // "deficiencias" vem como lista de marcações separadas por " | "
         // (ex.: dv_cego | outros) e vira as flags def_* que o validador
-        // espera, ligando/desligando o bloco de condição.
+        // espera, ligando/desligando o bloco de condição. A condição também
+        // existe sem marcação quando há CID/laudo — sem isso, o export→import
+        // apagaria o codigo_cid de quem tem só o laudo preenchido.
         const marcas = String(corpo.deficiencias || '')
           .split('|')
           .map((m) => m.trim())
@@ -728,7 +771,7 @@ function rotasAlunos({ db }) {
           return;
         }
         for (const marca of marcas) corpo[`def_${marca}`] = true;
-        corpo.tem_condicao = marcas.length ? 'Sim' : 'Não';
+        corpo.tem_condicao = marcas.length || corpo.codigo_cid || corpo.outros_laudos ? 'Sim' : 'Não';
 
         let dados;
         try {

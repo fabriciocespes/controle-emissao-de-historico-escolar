@@ -41,4 +41,13 @@ function parseCsv(texto, separador = ';') {
   return linhas;
 }
 
-module.exports = { parseCsv };
+// Escapa a célula só quando preciso (RFC 4180): aspas apenas se o valor
+// contiver separador, aspas ou quebra de linha. Usado na exportação — o
+// parseCsv de volta lê o resultado sem sobra.
+function celulaCsv(valor) {
+  const texto = String(valor ?? '');
+  if (/[;"\r\n]/.test(texto)) return `"${texto.replace(/"/g, '""')}"`;
+  return texto;
+}
+
+module.exports = { parseCsv, celulaCsv };

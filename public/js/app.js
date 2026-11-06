@@ -256,7 +256,7 @@
     $('#aba-migracao').hidden = estado.usuario.perfil !== 'admin';
     $('#aba-backup').hidden = estado.usuario.perfil !== 'admin';
     $('#grupo-configuracoes').hidden = estado.usuario.perfil !== 'admin';
-    abrirPainel('calendario');
+    abrirPainel('inicio');
     api('GET', '/api/pedidos/contagens').then(atualizarContadores).catch(() => {});
     carregarEscola();
     carregarSobre();
@@ -278,13 +278,14 @@
   function abrirPainel(nome) {
     estado.painel = nome;
     $$('.aba').forEach((a) => a.classList.toggle('ativa', a.dataset.painel === nome));
-    ['calendario', 'fechar-ano', 'reabrir-ano', 'migracao', 'renovacao', 'confeccionar', 'prontos', 'entregues', 'devendo', 'alunos', 'matricula', 'diario', 'funcionarios', 'turmas', 'alocacoes', 'usuarios', 'administracao', 'backup', 'relatorios'].forEach((p) => {
+    ['inicio', 'calendario', 'fechar-ano', 'reabrir-ano', 'migracao', 'renovacao', 'confeccionar', 'prontos', 'entregues', 'devendo', 'alunos', 'matricula', 'diario', 'funcionarios', 'turmas', 'alocacoes', 'usuarios', 'administracao', 'backup', 'relatorios'].forEach((p) => {
       $(`#painel-${p}`).hidden = p !== nome;
     });
     carregarPainel();
   }
 
   async function carregarPainel() {
+    if (estado.painel === 'inicio') return carregarInicio();
     if (estado.painel === 'calendario') return carregarCalendario();
     if (estado.painel === 'alunos') return carregarAlunos();
     if (estado.painel === 'matricula') return carregarMatricula();
@@ -325,6 +326,47 @@
     $('#badge-prontos').textContent = contagens.pronto;
     $('#badge-entregues').textContent = contagens.entregue;
   }
+
+  /* ---------------- início (pendências) ---------------- */
+
+  // Painel de landing: fila de pedidos, devendo histórico e renovação do
+  // ano de referência. Os cartões são atalhos para as telas correspondentes.
+  async function carregarInicio() {
+    try {
+      const dados = await api('GET', '/api/pendencias');
+      if (estado.painel !== 'inicio') return;
+      $('#inicio-confeccionar').textContent = dados.pedidos.aguardando_confeccao;
+      $('#inicio-prontos').textContent = dados.pedidos.pronto;
+      $('#inicio-entregues').textContent = dados.pedidos.entregue;
+      $('#inicio-devendo').textContent = dados.devendo;
+      $('#inicio-renovacao').textContent = dados.renovacao.pendentes;
+      $('#inicio-renovacao-detalhe').textContent =
+        `${dados.renovacao.renovados} de ${dados.renovacao.total} renovados · ano ${dados.renovacao.ano}`;
+      $('#inicio-info').textContent =
+        `Pendências do dia · pedidos, histórico em aberto e renovação (ano ${dados.renovacao.ano}).`;
+    } catch (e) {
+      if (e.status !== 401) notificar(e.message, 'erro');
+    }
+  }
+
+  $('#inicio-cartoes').addEventListener('click', (evento) => {
+    const cartao = evento.target.closest('[data-ir]');
+    if (cartao) abrirPainel(cartao.dataset.ir);
+  });
+
+  /* ---------------- exportação CSV ---------------- */
+
+  function exportarCsv(rota, erroPadrao) {
+    return baixarDocumento(rota, erroPadrao, 'Arquivo CSV gerado.');
+  }
+
+  $('#btn-exportar-alunos').addEventListener('click', () => {
+    exportarCsv('/api/alunos/exportar', 'Não foi possível exportar os alunos.');
+  });
+
+  $('#btn-exportar-funcionarios').addEventListener('click', () => {
+    exportarCsv('/api/funcionarios/exportar', 'Não foi possível exportar os funcionários.');
+  });
 
   /* ---------------- devendo histórico ---------------- */
 
@@ -1037,10 +1079,13 @@
       return;
     }
     declaracaoAtual = {
+      lote: false,
       alunoId: item.id,
       matriculaId: matricula.id,
       turmaId: matricula.turma_id,
     };
+    $('#declaracao-titulo').textContent = 'Emitir Declaração';
+    $('#declaracao-submit').textContent = 'Emitir Declaração';
     $('#declaracao-resumo').innerHTML = [
       `<p><span class="rotulo">Aluno</span> <span class="valor">${esc(item.nome)}</span></p>`,
       `<p><span class="rotulo">Turma</span> <span class="valor">${esc(matricula.turma_sigla || '')}</span></p>`,
@@ -1081,6 +1126,45 @@
     $('#declaracao-tipo').focus();
   }
 
+  // Modo lote: mesma modal, mas a saída é um ZIP com o .docx de cada aluno
+  // da turma. Ao contrário do modo único, os dois tipos ficam disponíveis —
+  // o servidor filtra aluno a aluno (transferido só Transferência, não
+  // transferido só Comprovação) e devolve os motivos das omissões.
+  function abrirDeclaracaoLote() {
+    const turmaId = estado.diario.turmaId;
+    const dados = estado.diario.dados;
+    if (!turmaId || !dados) {
+      notificar('Selecione a turma no Diário para gerar as declarações em lote.', 'erro');
+      return;
+    }
+    declaracaoAtual = { lote: true, turmaId };
+    $('#declaracao-titulo').textContent = 'Declarações da turma (.zip)';
+    $('#declaracao-submit').textContent = 'Baixar ZIP';
+    const t = dados.turma;
+    $('#declaracao-resumo').innerHTML = [
+      `<p><span class="rotulo">Turma</span> <span class="valor">${esc(t.sigla)}</span></p>`,
+      `<p><span class="rotulo">Ano letivo</span> <span class="valor">${esc(String(t.ano_letivo))}</span></p>`,
+      `<p><span class="rotulo">Alunos no Diário</span> <span class="valor">${(dados.alunos || []).length}</span></p>`,
+      '<p><span class="rotulo">Saída</span> <span class="valor">Um .docx por aluno, empacotado em ZIP</span></p>',
+    ].join('');
+    const form = $('#form-declaracao');
+    limparErros(form);
+    form.reset();
+    popularAnosDeclaracao();
+    $('#declaracao-tipo').innerHTML = [
+      '<option value="">Selecione o tipo...</option>',
+      ...Object.entries(TIPOS_DECLARACAO_LABEL).map(([valor, rotulo]) =>
+        `<option value="${valor}">${esc(rotulo)}</option>`),
+    ].join('');
+    $('#declaracao-situacao-opcoes').innerHTML = '';
+    $('#declaracao-situacao-campo').hidden = true;
+    $('#declaracao-final-campo').hidden = true;
+    abrirModal('#modal-declaracao');
+    $('#declaracao-tipo').focus();
+  }
+
+  $('#btn-declaracoes-lote').addEventListener('click', abrirDeclaracaoLote);
+
   $('#declaracao-tipo').addEventListener('change', () => {
     const tipo = $('#declaracao-tipo').value;
     if (!tipo) {
@@ -1115,6 +1199,47 @@
       notificar('Selecione a situação do aluno.', 'erro');
       return;
     }
+    if (situacao === 'cursou') {
+      const final = form.elements.declaracao_final?.value || '';
+      if (!final) {
+        notificar('Selecione a situação final do aluno.', 'erro');
+        return;
+      }
+    }
+
+    // Modo lote: a rota recebe só a turma; o servidor gera um .docx por
+    // aluno, omite os incompatíveis com motivo e devolve o ZIP.
+    if (declaracaoAtual.lote) {
+      const parametrosLote = new URLSearchParams({ tipo, situacao });
+      if (situacao === 'cursou') {
+        parametrosLote.set('situacao_final', form.elements.declaracao_final?.value || '');
+        parametrosLote.set('ano_letivo', form.elements.ano_letivo?.value || '');
+      }
+      const ok = await baixarDocumento(
+        `/api/diario/turmas/${declaracaoAtual.turmaId}/declaracoes?${parametrosLote}`,
+        'Não foi possível gerar as declarações em lote.',
+        'Declarações geradas.',
+        (resposta) => {
+          const total = resposta.headers.get('x-declaracoes-total') || '0';
+          const omitidos = Number(resposta.headers.get('x-declaracoes-omitidos') || 0);
+          let mensagem = `${total} declaração(ões) gerada(s) no ZIP.`;
+          if (omitidos > 0) {
+            let motivos = [];
+            try {
+              motivos = JSON.parse(
+                decodeURIComponent(resposta.headers.get('x-declaracoes-motivos') || '[]')
+              );
+            } catch { motivos = []; }
+            const detalhe = motivos.length ? ` ${motivos.join(' | ')}` : '';
+            mensagem += ` ${omitidos} aluno(s) omitido(s).${detalhe}`;
+          }
+          notificar(mensagem, 'sucesso');
+        }
+      );
+      if (ok) fecharModal($('#modal-declaracao'));
+      return;
+    }
+
     const parametros = new URLSearchParams({
       turma_id: declaracaoAtual.turmaId,
       matricula_id: declaracaoAtual.matriculaId,
@@ -1122,12 +1247,7 @@
       situacao,
     });
     if (situacao === 'cursou') {
-      const final = form.elements.declaracao_final?.value || '';
-      if (!final) {
-        notificar('Selecione a situação final do aluno.', 'erro');
-        return;
-      }
-      parametros.set('situacao_final', final);
+      parametros.set('situacao_final', form.elements.declaracao_final?.value || '');
       parametros.set('ano_letivo', form.elements.ano_letivo?.value || '');
     }
     const ok = await baixarDocumento(
@@ -3454,6 +3574,7 @@
       }
       estado.diario.turmaId = null;
       $('#diario-detalhes').hidden = true;
+      $('#btn-declaracoes-lote').hidden = true;
     }
   }
 
@@ -3478,6 +3599,7 @@
 
   async function visualizarDiario() {
     const turmaId = Number($('#diario-turma').value) || null;
+    $('#btn-declaracoes-lote').hidden = !turmaId;
     if (!turmaId) {
       $('#diario-vazio-selecao').hidden = false;
       $('#diario-detalhes').hidden = true;
@@ -4128,14 +4250,20 @@
     );
   }
 
-  async function baixarDocumento(rota, erroPadrao, sucesso) {
+  // baixarDocumento(rota, erroPadrao, sucesso, aoConcluir?) — faz o download
+  // de um documento binário. Com `aoConcluir(resposta)`, o callback substitui
+  // a notificação de sucesso (usado pelo lote de declarações, que lê os
+  // cabeçalhos X-Declaracoes-* para montar o resumo).
+  async function baixarDocumento(rota, erroPadrao, sucesso, aoConcluir) {
     try {
       const resposta = await fetch(rota, {
         headers: estado.csrf ? { 'x-csrf-token': estado.csrf } : {}
       });
       if (!resposta.ok) {
         const dados = await resposta.json().catch(() => null);
-        throw new Error((dados && dados.erro) || erroPadrao);
+        const erro = new Error((dados && dados.erro) || erroPadrao);
+        erro.motivos = (dados && dados.motivos) || null;
+        throw erro;
       }
       const blob = await resposta.blob();
       const nome = (resposta.headers.get('content-disposition') || '')
@@ -4148,10 +4276,13 @@
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
-      notificar(sucesso, 'sucesso');
+      if (aoConcluir) aoConcluir(resposta);
+      else notificar(sucesso, 'sucesso');
       return true;
     } catch (e) {
-      notificar(e.message, 'erro');
+      const detalhe = (e.motivos || [])
+        .map((m) => `${m.quantidade}× ${m.motivo}`).join(' | ');
+      notificar(detalhe ? `${e.message} ${detalhe}` : e.message, 'erro');
       return false;
     }
   }

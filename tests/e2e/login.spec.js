@@ -11,7 +11,10 @@ test('login válido entra no sistema e logout volta para o login', async ({ page
   await entrar(page, 'admin', 'admin123');
   await expect(page.locator('#tela-app')).toBeVisible();
   await expect(page.locator('#tela-login')).toBeHidden();
-  await expect(page.locator('#painel-calendario')).toBeVisible();
+  // Landing page nova: painel de pendências do dia (não é mais o Calendário).
+  await expect(page.locator('#painel-inicio')).toBeVisible();
+  await expect(page.locator('#painel-calendario')).toBeHidden();
+  await expect(page.locator('#aba-inicio')).toBeVisible();
   await expect(page.locator('#aba-calendario')).toBeVisible();
   await expect(page.locator('#aba-usuarios')).toBeVisible();
   await expect(page.locator('#grupo-configuracoes')).toBeVisible();

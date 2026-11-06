@@ -5,7 +5,7 @@ const { normalizar } = require('../utils/texto');
 const { agora } = require('../db');
 const { exigirPerfil } = require('../auth');
 const { emTransacao } = require('../utils/dependencias');
-const { parseCsv } = require('../utils/csv');
+const { parseCsv, celulaCsv } = require('../utils/csv');
 
 const POR_PAGINA = 50;
 
@@ -391,6 +391,37 @@ function rotasFuncionarios({ db }) {
       .map(formatarFuncionario);
 
     return resposta.json({ itens, total, pagina, limite });
+  });
+
+  // Exportação CSV: mesmo layout da importação (COLUNAS + separador ";",
+  // parseCsv padrão), datas convertidas para dd/mm/aaaa exatamente nas três
+  // colunas que o import converte de volta, acumulação em "sim"/"nao" e BOM
+  // UTF-8 (removido pelo parseCsv na importação). Round-trip: o arquivo
+  // exportado volta a entrar por POST /importar sem ajustes.
+  roteador.get('/exportar', (requisicao, resposta) => {
+    const DATAS_CSV_FUNC = ['data_nascimento', 'rg_data_emissao', 'data_admissao'];
+    const linhas = db
+      .prepare(`SELECT ${COLUNAS.join(', ')} FROM funcionarios ORDER BY nome ASC, id ASC`)
+      .all();
+
+    const corpo = [
+      COLUNAS.join(';'),
+      ...linhas.map((linha) =>
+        COLUNAS.map((coluna) => {
+          let valor = linha[coluna];
+          if (DATAS_CSV_FUNC.includes(coluna)) {
+            valor = validarData(valor) ? formatarDataBR(valor) : valor;
+          } else if (coluna === 'acumulacao_cargo') {
+            valor = valor ? 'sim' : 'nao';
+          }
+          return celulaCsv(valor);
+        }).join(';')
+      ),
+    ].join('\r\n');
+
+    resposta.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    resposta.setHeader('Content-Disposition', `attachment; filename="funcionarios-${dataLocal()}.csv"`);
+    return resposta.end(`\uFEFF${corpo}\r\n`);
   });
 
   roteador.get('/:id(\\d+)', (requisicao, resposta) => {

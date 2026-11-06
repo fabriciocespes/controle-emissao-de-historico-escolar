@@ -48,6 +48,8 @@
     </div>
 
     <nav class="menu" id="abas" aria-label="Menu principal">
+      <p class="menu-grupo">Início</p>
+      <button type="button" class="aba" data-painel="inicio" id="aba-inicio">Início</button>
       <p class="menu-grupo">Ano letivo</p>
       <button type="button" class="aba ativa" data-painel="calendario" id="aba-calendario">
         Calendário do ano letivo
@@ -105,6 +107,39 @@
     </div>
 
     <main class="conteudo">
+
+    <section class="painel" id="painel-inicio" hidden>
+      <div class="barra">
+        <span class="secundario" id="inicio-info" style="margin:0"></span>
+      </div>
+      <div class="inicio-cartoes" id="inicio-cartoes">
+        <button type="button" class="inicio-cartao" data-ir="confeccionar">
+          <span class="inicio-numero ambar" id="inicio-confeccionar">0</span>
+          <span class="inicio-rotulo">A confeccionar</span>
+          <span class="inicio-detalhe">Pedidos aguardando confecção</span>
+        </button>
+        <button type="button" class="inicio-cartao" data-ir="prontos">
+          <span class="inicio-numero azul" id="inicio-prontos">0</span>
+          <span class="inicio-rotulo">Prontos</span>
+          <span class="inicio-detalhe">Históricos aguardando retirada</span>
+        </button>
+        <button type="button" class="inicio-cartao" data-ir="entregues">
+          <span class="inicio-numero verde" id="inicio-entregues">0</span>
+          <span class="inicio-rotulo">Entregues</span>
+          <span class="inicio-detalhe">Pedidos já entregues</span>
+        </button>
+        <button type="button" class="inicio-cartao" data-ir="devendo">
+          <span class="inicio-numero ambar" id="inicio-devendo">0</span>
+          <span class="inicio-rotulo">Devendo histórico</span>
+          <span class="inicio-detalhe">Alunos com histórico pendente</span>
+        </button>
+        <button type="button" class="inicio-cartao" data-ir="renovacao">
+          <span class="inicio-numero azul" id="inicio-renovacao">0</span>
+          <span class="inicio-rotulo">Renovação de matrícula</span>
+          <span class="inicio-detalhe" id="inicio-renovacao-detalhe">Alunos sem renovação</span>
+        </button>
+      </div>
+    </section>
 
     <section class="painel" id="painel-calendario">
       <div class="barra">
@@ -235,6 +270,7 @@
       <div class="barra">
         <input class="busca" id="busca-alunos" type="search"
                placeholder="Buscar por nome, CPF, responsável ou nº do cadastro">
+        <button type="button" class="btn" id="btn-exportar-alunos">Exportar CSV</button>
         <button type="button" class="btn" id="btn-importar-alunos">Importar CSV</button>
         <button type="button" class="btn primario" id="btn-novo-aluno">+ Novo aluno</button>
         <input type="file" id="importar-alunos-arquivo" accept=".csv,text/csv" hidden>
@@ -299,6 +335,9 @@
         <label class="campo"><span>Turma</span>
           <select id="diario-turma"></select>
         </label>
+        <button type="button" class="btn" id="btn-declaracoes-lote" hidden>
+          Declarações em lote (.zip)
+        </button>
       </div>
       <p class="vazio" id="diario-vazio-selecao" hidden>Selecione o ano letivo e a turma para visualizar o diário.</p>
       <div id="diario-detalhes" hidden>
@@ -469,6 +508,7 @@
       <div class="barra">
         <input class="busca" id="busca-funcionarios" type="search"
                placeholder="Buscar por nome, CPF, matrícula ou nº do cadastro">
+        <button type="button" class="btn" id="btn-exportar-funcionarios">Exportar CSV</button>
         <button type="button" class="btn" id="btn-importar-funcionarios">Importar CSV</button>
         <button type="button" class="btn primario" id="btn-novo-funcionario">+ Novo funcionário</button>
         <input type="file" id="importar-funcionarios-arquivo" accept=".csv,text/csv" hidden>
@@ -2060,7 +2100,7 @@
       </div>
       <div class="rodape">
         <button type="button" class="btn" data-fechar>Cancelar</button>
-        <button type="submit" class="btn primario">Emitir Declaração</button>
+        <button type="submit" class="btn primario" id="declaracao-submit">Emitir Declaração</button>
       </div>
     </form>
   </div>

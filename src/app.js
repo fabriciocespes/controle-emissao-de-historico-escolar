@@ -19,6 +19,7 @@ const { rotasRelatorios } = require('./routes/relatorios');
 const { rotasEncerramento } = require('./routes/encerramento');
 const { rotasMigracao } = require('./routes/migracao');
 const { rotasRenovacoes } = require('./routes/renovacoes');
+const { rotasPendencias } = require('./routes/pendencias');
 const { rotasSobre } = require('./routes/sobre');
 const { rotasBackup } = require('./routes/backup');
 
@@ -67,6 +68,7 @@ function criarApp({ db, config }) {
   app.use('/api/migracao', exigirPerfil('admin'), rotasMigracao({ db }));
   app.use('/api/backup', exigirPerfil('admin'), rotasBackup({ db, config }));
   app.use('/api/renovacoes', rotasRenovacoes({ db }));
+  app.use('/api/pendencias', rotasPendencias({ db }));
   app.use('/api/sobre', rotasSobre({ config }));
 
   app.use('/api', (requisicao, resposta) =>

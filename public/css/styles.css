@@ -318,6 +318,38 @@ h1, h2 { margin: 0; font-weight: 650; }
 
 .conteudo { padding: 22px; max-width: 1320px; width: 100%; margin: 0 auto; flex: 1; }
 
+/* ---------- Início (cartões de pendências) ---------- */
+.inicio-cartoes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
+  gap: 14px;
+}
+.inicio-cartao {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 18px;
+  background: var(--cartao);
+  border: 1px solid var(--linha);
+  border-radius: var(--raio);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.05s;
+}
+.inicio-cartao:hover { border-color: #bfdbfe; box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08); }
+.inicio-cartao:active { transform: translateY(1px); }
+.inicio-numero {
+  font-size: 30px;
+  font-weight: 750;
+  line-height: 1.1;
+}
+.inicio-numero.ambar { color: var(--ambar-texto); }
+.inicio-numero.azul { color: var(--azul-texto); }
+.inicio-numero.verde { color: var(--verde-texto); }
+.inicio-rotulo { font-size: 14.5px; font-weight: 650; color: var(--texto); }
+.inicio-detalhe { font-size: 12.5px; color: var(--texto-suave); }
+
 /* ---------- Rodapé "Sobre o sistema" (todas as telas) ---------- */
 .rodape-sistema {
   position: sticky;
