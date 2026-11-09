@@ -6,6 +6,7 @@ const { COLUNAS: COLUNAS_FUNCIONARIOS } = require('../../src/routes/funcionarios
 
 const NOME_ALUNO = 'Aluno Inicio E2E';
 const CPF_ALUNO = '991.000.000-86';
+const SIGLA_TURMA = 'INICIO-01';
 
 function alunoInicio() {
   return {
@@ -39,6 +40,9 @@ test.afterAll(async ({ browser }) => {
   const context = await browser.newContext();
   try {
     const csrf = await apiLogin(context);
+    for (const t of await acharItens(context, '/api/turmas', SIGLA_TURMA)) {
+      await apiDelete(context, csrf, `/api/turmas/${t.id}`);
+    }
     for (const a of await acharItens(context, '/api/alunos', NOME_ALUNO)) {
       await apiDelete(context, csrf, `/api/alunos/${a.id}`);
     }
@@ -108,4 +112,70 @@ test('exportação CSV de alunos e funcionários baixa com BOM e cabeçalho do m
   expect([...bufferFunc.subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf], 'BOM UTF-8 no início');
   const cabecalhoFunc = bufferFunc.toString('utf8').split(/\r?\n/)[0].replace(/^\uFEFF/, '');
   expect(cabecalhoFunc).toBe(COLUNAS_FUNCIONARIOS.join(';'));
+});
+
+test('atalhos do Início: emitir declaração do aluno e novo aluno', async ({ page, context }) => {
+  const csrf = await apiLogin(context);
+
+  // Reaproveita o aluno/turma já criados pelo teste anterior do arquivo.
+  let aluno = (await acharItens(context, '/api/alunos', NOME_ALUNO))[0];
+  if (!aluno) aluno = await apiPost(context, csrf, '/api/alunos', alunoInicio());
+  let turma = (await acharItens(context, '/api/turmas', SIGLA_TURMA))[0];
+  if (!turma) {
+    turma = await apiPost(context, csrf, '/api/turmas', {
+      ano_letivo: new Date().getFullYear(),
+      matriz: 'Ensino Fundamental (Anos Iniciais)',
+      ano_escolaridade: '5º ano',
+      sigla: SIGLA_TURMA,
+      turno: 'Manhã',
+      tipo_turma: 'NAI',
+    });
+  }
+  const matriculas = await (await context.request.get(`/api/matriculas?aluno_id=${aluno.id}`)).json();
+  if (!(matriculas.itens || []).length) {
+    await apiPost(context, csrf, '/api/matriculas', {
+      aluno_id: aluno.id, turma_id: turma.id, data_inicio: '2026-02-10',
+    });
+  }
+
+  await page.goto('/');
+  await expect(page.locator('#tela-app')).toBeVisible();
+
+  // Seção "Ações rápidas" com os dois atalhos.
+  await expect(page.locator('#inicio-atalhos .inicio-cartao')).toHaveCount(2);
+  await expect(page.locator('#inicio-atalhos [data-atalho="declaracao"]')).toBeVisible();
+  await expect(page.locator('#inicio-atalhos [data-atalho="novo-aluno"]')).toBeVisible();
+
+  // Atalho "Emitir declaração" → painel de escolha do aluno → mesmo modal do Diário.
+  await page.click('#inicio-atalhos [data-atalho="declaracao"]');
+  await expect(page.locator('#painel-declaracao')).toBeVisible();
+  await expect(page.locator('#painel-inicio')).toBeHidden();
+  await page.fill('#busca-declaracao', NOME_ALUNO);
+  const linha = page.locator('#corpo-declaracao tr', { hasText: NOME_ALUNO });
+  await expect(linha).toBeVisible();
+  await linha.getByRole('button', { name: 'Gerar Declaração' }).click();
+  await expect(page.locator('#modal-declaracao')).toBeVisible();
+  await expect(page.locator('#declaracao-resumo')).toContainText(SIGLA_TURMA);
+  await page.selectOption('#declaracao-tipo', 'comprovacao');
+  await page.check('input[name="declaracao_situacao"][value="matriculado"]');
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.click('#form-declaracao button[type="submit"]'),
+  ]);
+  expect(download.suggestedFilename()).toMatch(/^declaracao-escolar-aluno-inicio-e2e\.docx$/);
+  await expect(page.locator('#modal-declaracao')).toBeHidden();
+
+  // Atalho "Novo aluno" → abre a mesma modal do botão "+ Novo aluno".
+  await page.click('#aba-inicio');
+  await expect(page.locator('#painel-inicio')).toBeVisible();
+  await page.click('#inicio-atalhos [data-atalho="novo-aluno"]');
+  await expect(page.locator('#modal-aluno')).toBeVisible();
+  await expect(page.locator('#aluno-titulo')).toHaveText('Novo aluno');
+  await expect(page.locator('#aluno-nome')).toBeFocused();
+  await page.locator('#modal-aluno .fecha').click();
+  await expect(page.locator('#modal-aluno')).toBeHidden();
+
+  // O menu lateral também ganhou a entrada "Emitir declaração".
+  await page.click('.aba[data-painel="declaracao"]');
+  await expect(page.locator('#painel-declaracao')).toBeVisible();
 });

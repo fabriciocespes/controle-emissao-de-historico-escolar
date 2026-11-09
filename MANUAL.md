@@ -107,6 +107,13 @@ Ao entrar no sistema a primeira tela é o **Início** (também acessível pelo b
 - **Renovação:** o ano exibido é o do período letivo vigente (hoje entre as datas de início e término em *Administração*); fora do período, o ano corrente.
 - Disponível para administrador e operador.
 
+Abaixo dos cartões há a seção **Ações rápidas**, com dois atalhos:
+
+| Atalho | O que faz |
+|---|---|
+| **Emitir declaração** | Abre a tela *Emitir declaração* (menu **Histórico Escolar**): busque o aluno por nome ou CPF e clique em **Gerar Declaração** — abre o mesmo modal de declaração usado no Diário e baixa o `.docx`. |
+| **Novo aluno** | Abre a mesma modal do botão **+ Novo aluno** da tela *Cadastro de alunos*, já com o cursor no campo Nome (cadastro e matrícula em seguida). |
+
 ### 4.1 Cabeçalho da escola (acima do menu)
 
 Mostra **logo (2 cm × 2 cm)**, **nome completo da escola** e **código INEP**.
@@ -222,7 +229,7 @@ Escolha um **modelo pronto** (Matrículas Pós-Censo, Quadro de Turmas, Mapa de 
 ### 4.12 Documentos em Word (.docx)
 
 - **Ficha de Matrícula:** no **Diário**, junto às ações do aluno — preenche o formulário oficial com os dados do aluno e baixa o `.docx`.
-- **Declaração Escolar:** na visualização do aluno (**Ver aluno**), botão **Gerar Declaração** — tipos *Comprovação de Escolaridade* e *Transferência*, com situação e situação final; o sistema valida o que combinam com a situação da matrícula, preenche o modelo oficial e baixa o `.docx`. Só aparece para aluno com matrícula.
+- **Declaração Escolar:** na visualização do aluno (**Ver aluno**), botão **Gerar Declaração** — tipos *Comprovação de Escolaridade* e *Transferência*, com situação e situação final; o sistema valida o que combinam com a situação da matrícula, preenche o modelo oficial e baixa o `.docx`. Só aparece para aluno com matrícula. Também pode ser emitida pela tela **Emitir declaração** do menu (ou pelo atalho do **Início**): busque o aluno e clique em **Gerar Declaração**.
 - **Declarações em lote (ZIP):** no **Diário**, botão **Declarações em lote (.zip)** gera **um `.docx` por aluno da turma**, empacotado em `declaracoes-<turma>-<ano>.zip`. A modal é a mesma da declaração única (título *Declarações da turma (.zip)*, botão **Baixar ZIP**), mas **os dois tipos ficam disponíveis** — o servidor decide aluno a aluno: **transferido só sai na Transferência** e **não transferido só sai na Comprovação de Escolaridade**. Quem não cabe é **omitido com motivo**, e o aviso pós-download informa "*X declaração(ões) gerada(s) no ZIP*" e "*Y aluno(s) omitido(s)*" com o motivo de cada grupo. Se **ninguém** gerar, nada é baixado: aparece o erro com os motivos agrupados ("*N× motivo*").
 
 ### 4.13 Administração (somente administrador)
@@ -404,12 +411,12 @@ historico-escolar/
 
 ```bat
 node --test tests/smoke.test.js   # testes de API (84)
-npx playwright test               # testes de interface (41; usa a porta 3100)
+npx playwright test               # testes de interface (42; usa a porta 3100)
 ```
 
 - Na primeira vez, instalar o navegador dos testes: `npx playwright install chromium`.
 - `npm test` roda a descoberta padrão do Node (`node --test`).
-- Cobrem: login/permissões, pedidos e regra de datas, cadastros, **importação e exportação CSV** (round-trip), matrículas e lote, diário, **declarações em lote (ZIP)**, transferências/retornos, pós-censo, alocação de professores, documentos em Word (ficha e declaração), relatórios (prévia e PDF, **alunos por turma com filtro em combo e agrupamento sem colapso de linhas**), **encerramento do ano letivo**, **migração em lote para o novo ano**, **painel inicial de pendências**, **atualização sem perder dados** (contrato de empacotamento do instalador + reabertura do banco) e o rodapé **Sobre**.
+- Cobrem: login/permissões, pedidos e regra de datas, cadastros, **importação e exportação CSV** (round-trip), matrículas e lote, diário, **declarações em lote (ZIP)**, transferências/retornos, pós-censo, alocação de professores, documentos em Word (ficha e declaração), relatórios (prévia e PDF, **alunos por turma com filtro em combo e agrupamento sem colapso de linhas**), **encerramento do ano letivo**, **migração em lote para o novo ano**, **painel inicial de pendências** (incluindo os **atalhos de emitir declaração e novo aluno**), **atualização sem perder dados** (contrato de empacotamento do instalador + reabertura do banco) e o rodapé **Sobre**.
 - Os testes de interface sobem o próprio servidor E2E em `localhost:3100` com banco temporário — deixe a porta 3100 livre.
 
 ---

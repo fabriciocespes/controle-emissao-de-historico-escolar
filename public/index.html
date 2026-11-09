@@ -71,6 +71,7 @@
       <button type="button" class="aba" data-painel="devendo">
         Devendo Histórico <span class="badge ambar" id="badge-devendo">0</span>
       </button>
+      <button type="button" class="aba" data-painel="declaracao">Emitir declaração</button>
       <p class="menu-grupo">Cadastros</p>
       <button type="button" class="aba" data-painel="alunos">Alunos <span class="badge azul" id="badge-alunos">0</span></button>
       <button type="button" class="aba" data-painel="funcionarios">Funcionários <span class="badge verde" id="badge-funcionarios">0</span></button>
@@ -137,6 +138,32 @@
           <span class="inicio-numero azul" id="inicio-renovacao">0</span>
           <span class="inicio-rotulo">Renovação de matrícula</span>
           <span class="inicio-detalhe" id="inicio-renovacao-detalhe">Alunos sem renovação</span>
+        </button>
+      </div>
+
+      <div class="inicio-secao-titulo">Ações rápidas</div>
+      <div class="inicio-cartoes" id="inicio-atalhos">
+        <button type="button" class="inicio-cartao" data-atalho="declaracao">
+          <span class="inicio-icone azul" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h5"/>
+            </svg>
+          </span>
+          <span class="inicio-rotulo">Emitir declaração</span>
+          <span class="inicio-detalhe">Escolher o aluno e gerar o documento</span>
+        </button>
+        <button type="button" class="inicio-cartao" data-atalho="novo-aluno">
+          <span class="inicio-icone verde" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/>
+            </svg>
+          </span>
+          <span class="inicio-rotulo">Novo aluno</span>
+          <span class="inicio-detalhe">Cadastrar aluno e matricular</span>
         </button>
       </div>
     </section>
@@ -264,6 +291,31 @@
         </table>
       </div>
       <p class="vazio" id="vazio-devendo" hidden>Nenhum aluno devendo histórico escolar.</p>
+    </section>
+
+    <section class="painel" id="painel-declaracao" hidden>
+      <div class="barra">
+        <input class="busca" id="busca-declaracao" type="search"
+               placeholder="Buscar aluno por nome ou CPF">
+        <span class="secundario" style="margin:0">
+          Escolha o aluno e clique em <b>Gerar Declaração</b> — o mesmo modelo usado no Diário.
+        </span>
+      </div>
+      <div class="tabela-rolagem">
+        <table>
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>CPF</th>
+              <th>Nascimento</th>
+              <th>Responsável</th>
+              <th class="acao">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="corpo-declaracao"></tbody>
+        </table>
+      </div>
+      <p class="vazio" id="vazio-declaracao" hidden>Nenhum aluno encontrado.</p>
     </section>
 
     <section class="painel" id="painel-alunos" hidden>

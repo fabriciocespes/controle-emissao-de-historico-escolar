@@ -349,6 +349,26 @@ h1, h2 { margin: 0; font-weight: 650; }
 .inicio-numero.verde { color: var(--verde-texto); }
 .inicio-rotulo { font-size: 14.5px; font-weight: 650; color: var(--texto); }
 .inicio-detalhe { font-size: 12.5px; color: var(--texto-suave); }
+.inicio-secao-titulo {
+  margin: 24px 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--texto-suave);
+}
+.inicio-icone {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: var(--azul-fundo);
+  color: var(--azul-texto);
+}
+.inicio-icone.verde { background: var(--verde-fundo); color: var(--verde-texto); }
+.inicio-icone.ambar { background: var(--ambar-fundo); color: var(--ambar-texto); }
 
 /* ---------- Rodapé "Sobre o sistema" (todas as telas) ---------- */
 .rodape-sistema {
