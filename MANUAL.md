@@ -31,7 +31,7 @@ Aplicação local para controlar a emissão e entrega de Históricos Escolar de 
 
 **Requisitos:** Windows 10 ou 11, 64 bits. Não precisa ter Node.js nem nada mais.
 
-1. Copie o arquivo `Instalador-HistoricoEscolar.exe` (23,9 MB) para o computador de destino.
+1. Copie o arquivo `Instalador-HistoricoEscolar.exe` (27,2 MB) para o computador de destino.
 2. Clique duas vezes nele.
 3. Clique em **Avançar** até **Concluir**.
    - Se aparecer *"Windows protegeu seu computador"*: clique em **Mais informações → Executar assim mesmo** (acontece porque o instalador não tem assinatura digital paga).
@@ -49,6 +49,31 @@ Aplicação local para controlar a emissão e entrega de Históricos Escolar de 
 - **Abrir:** inicia o servidor em segundo plano (sem janelas) e abre o navegador no sistema.
 - **Encerrar o sistema:** desliga o servidor (o navegador pode ficar aberto — pode fechar à mão).
 - **Desinstalar:** remove o programa. A pasta com dados (`data`) e PDFs (`pdfs`) **fica preservada**.
+
+### 2.1 Atualizando para uma versão nova
+
+Instalar a versão nova **por cima da antiga** é a atualização — **não é preciso desinstalar** (e desinstalar antes só acrescenta risco de perder o endereço da pasta).
+
+1. *(Recomendado)* Faça um backup: menu **Backup** → **Salvar agora** (ou **Baixar**).
+2. Feche o sistema: atalho **Encerrar o sistema** (o instalador também encerra sozinho, se esquecer).
+3. Execute o `Instalador-HistoricoEscolar.exe` da versão nova e clique em **Avançar** até **Concluir**, **sem trocar a pasta de destino**.
+   - Se for detectada uma instalação anterior, a página de confirmação mostra: **"Atualização do sistema instalado"** — os dados serão mantidos.
+4. Abra o sistema e confira a versão nova no rodapé (**Sobre o sistema** → *Versão*).
+
+**O que é mantido (nunca é tocado pelo instalador):**
+
+| Mantido | Onde |
+|---|---|
+| Banco de dados (cadastros, pedidos, usuários, senhas) | `data\` |
+| PDFs dos alunos | `pdfs\` |
+| Backups automáticos e manuais | `backups\` |
+| Modelos de importação em branco | `planilhas\` (a versão nova regrava só os 2 modelos oficiais em branco; planilhas suas na pasta não são tocadas) |
+
+**O que é substituído:** os arquivos do programa (`src`, `public`, `node_modules`, `node.exe`, atalhos).
+
+Na primeira abertura da versão nova as **migrações do banco rodam sozinhas** (adicionam as tabelas/colunas novas sem apagar nada) e o login continua o mesmo — senha trocada permanece trocada.
+
+> O instalador **não empacota** a pasta `data` nem nenhuma pasta de dados: por construção, não existe como o upgrade sobrescrever o banco do usuário.
 
 ---
 
@@ -343,6 +368,8 @@ Agendador de Tarefas → nova tarefa "Iniciar ao logar" → executar:
 ```
 4. Saída: `dist\Instalador-HistoricoEscolar.exe`
 
+O script tem uma seção `[Code]` de **atualização**: detecta a instalação anterior (chave de desinstalação em `HKCU` ou `server.js` já na pasta), encerra o servidor da porta 3000 antes de copiar por cima e mostra o aviso *"Atualização do sistema instalado"* na página de confirmação (seção 2.1). O `Excludes` da entrada principal mantém `data\`, `pdfs\` e `backups\` fora do pacote — contratado pelo teste *"instalador: pacote nunca leva dados…"* (seção 9.6).
+
 ### 9.5 Estrutura do código
 
 ```
@@ -372,13 +399,13 @@ historico-escolar/
 ### 9.6 Testes
 
 ```bat
-node --test tests/smoke.test.js   # testes de API (81)
+node --test tests/smoke.test.js   # testes de API (83)
 npx playwright test               # testes de interface (40; usa a porta 3100)
 ```
 
 - Na primeira vez, instalar o navegador dos testes: `npx playwright install chromium`.
 - `npm test` roda a descoberta padrão do Node (`node --test`).
-- Cobrem: login/permissões, pedidos e regra de datas, cadastros, **importação e exportação CSV** (round-trip), matrículas e lote, diário, **declarações em lote (ZIP)**, transferências/retornos, pós-censo, alocação de professores, documentos em Word (ficha e declaração), relatórios (prévia e PDF), **encerramento do ano letivo**, **migração em lote para o novo ano**, **painel inicial de pendências** e o rodapé **Sobre**.
+- Cobrem: login/permissões, pedidos e regra de datas, cadastros, **importação e exportação CSV** (round-trip), matrículas e lote, diário, **declarações em lote (ZIP)**, transferências/retornos, pós-censo, alocação de professores, documentos em Word (ficha e declaração), relatórios (prévia e PDF), **encerramento do ano letivo**, **migração em lote para o novo ano**, **painel inicial de pendências**, **atualização sem perder dados** (contrato de empacotamento do instalador + reabertura do banco) e o rodapé **Sobre**.
 - Os testes de interface sobem o próprio servidor E2E em `localhost:3100` com banco temporário — deixe a porta 3100 livre.
 
 ---
@@ -388,6 +415,7 @@ npx playwright test               # testes de interface (40; usa a porta 3100)
 | Problema | Solução |
 |---|---|
 | "Porta 3000 já em uso" | Já existe um servidor rodando — abra o navegador em `localhost:3000`. Se for outra coisa, use *Encerrar o sistema* ou reinicie o PC. |
+| Como atualizar para uma versão nova | Rode o instalador novo **por cima** do antigo, na mesma pasta (seção 2.1) — os dados ficam. Não desinstale antes. |
 | Ícone não abre nada | Instalação incompleta: desinstale e instale novamente. |
 | Página em branco / não carrega | Aguarde 3–5 segundos após clicar; verifique se o antivirus não bloqueou o `node.exe`. |
 | Não abre de outro PC da rede | Firewall: permita o Node.js; confirme o IP e que estão na mesma rede. |

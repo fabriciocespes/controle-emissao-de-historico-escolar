@@ -4885,3 +4885,125 @@ test('painel inicial de pendencias: pedidos, devendo e renovacao do ano', async 
     }
   }
 });
+
+/* ---------------- atualização sem perder dados ---------------- */
+
+// Contrato de empacotamento do instalador: é ele que garante que instalar a
+// versão nova por cima da antiga só substitui arquivos do programa.
+test('instalador: pacote nunca leva dados e o AppId é o mesmo em todas as versões', () => {
+  const iss = fs.readFileSync(
+    path.join(__dirname, '..', 'instalador', 'HistoricoEscolar.iss'),
+    'utf8'
+  );
+
+  // AppId fixo => a versão nova instala na MESMA pasta e por cima da
+  // antiga (a entrada de desinstalar é atualizada, não duplicada).
+  assert.match(iss, /AppId=\{\{8C2E5F41-7A9B-4D3E-B1C6-0A9E2F7D8B35\}/);
+
+  // Entrada principal do pacote: dados excluídos em qualquer profundidade.
+  const principal = iss.split(/\r?\n/).find((l) => l.startsWith('Source: "..\\*"'));
+  assert.ok(principal, 'a entrada principal do pacote existe');
+  for (const exclusao of [
+    'node_modules\\*', 'data\\*', 'pdfs\\*', 'planilhas\\*', 'backups\\*',
+    'tests\\*', 'instalador\\*', '*.db', '*.pdf', '*.csv',
+  ]) {
+    assert.ok(principal.includes(exclusao), `o pacote exclui ${exclusao}`);
+  }
+
+  // Nenhuma linha de [Files] copia data/pdfs/backups de origem para o destino.
+  assert.ok(
+    !/^Source:.*\.\.(\\|\/)(data|pdfs|backups|planilhas)/im.test(iss),
+    'nenhuma fonte empacota as pastas de dados'
+  );
+
+  // Pastas de dados sempre existem no destino (inclusive na atualização).
+  assert.match(iss, /Name: "\{app\}\\data"/);
+  assert.match(iss, /Name: "\{app\}\\pdfs"/);
+
+  // O instalador detecta a instalação anterior, avisa que mantém os dados e
+  // encerra o servidor antes de copiar por cima.
+  assert.match(iss, /^\[Code\]$/m, 'a seção [Code] existe');
+  assert.match(iss, /function InitializeSetup/);
+  assert.match(iss, /Atualização do sistema instalado/);
+  assert.match(iss, /function PrepareToInstall/);
+  assert.match(iss, /EncerrarServidor/);
+});
+
+// Simula o fluxo de upgrade de ponta a ponta: mesma pasta de dados, código
+// "novo" por cima — SCHEMA + migrar + semearAdmin rodam de novo e nada do
+// usuário se perde.
+test('atualização por cima: versão nova no mesmo banco preserva dados e senha', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'he-upgrade-'));
+  const caminhoDb = path.join(dir, 'data', 'historico.db');
+  let servidorAntigo = null;
+  let servidorNovo = null;
+  let dbAntigo = null;
+  let dbNovo = null;
+
+  async function subir(db) {
+    const app = criarApp({ db, config });
+    return new Promise((resolve) => {
+      const s = app.listen(0, '127.0.0.1', () => resolve(s));
+    });
+  }
+
+  try {
+    // ---- "instalação antiga": primeira execução semeia o admin, o usuário
+    // troca a senha e cadastra um aluno.
+    const primeira = abrirBanco(caminhoDb);
+    dbAntigo = primeira.db;
+    assert.ok(primeira.adminInicial, 'a primeira execução cria o administrador');
+    servidorAntigo = await subir(dbAntigo);
+    const urlAntiga = `http://127.0.0.1:${servidorAntigo.address().port}`;
+
+    const cliente = new Cliente(urlAntiga);
+    assert.equal((await cliente.login('admin', 'admin123')).status, 200);
+
+    const usuarios = await cliente.enviar('GET', '/api/usuarios');
+    const admin = usuarios.json.find((u) => u.login === 'admin');
+    const trocada = await cliente.enviar('PUT', `/api/usuarios/${admin.id}`, {
+      senha: 'senhaAtualizada1',
+      senha_confirmacao: 'senhaAtualizada1',
+    });
+    assert.equal(trocada.status, 200, JSON.stringify(trocada.json));
+
+    const aluno = await cliente.enviar('POST', '/api/alunos', alunoCadastro({
+      nome: 'Aluno Atualizacao Por Cima',
+      cpf: cpfNovo('993000001'),
+      filiacao1_cpf: '',
+    }));
+    assert.equal(aluno.status, 201, JSON.stringify(aluno.json));
+
+    // ---- "o instalador da versão nova roda": fecha tudo e reabre o MESMO
+    // arquivo de banco, como faria o servidor da versão nova.
+    await new Promise((resolve) => servidorAntigo.close(resolve));
+    servidorAntigo = null;
+    dbAntigo.close();
+    dbAntigo = null;
+
+    const segunda = abrirBanco(caminhoDb);
+    dbNovo = segunda.db;
+    assert.equal(segunda.adminInicial, null, 'semearAdmin não duplica nem reseta a senha');
+    servidorNovo = await subir(dbNovo);
+    const urlNova = `http://127.0.0.1:${servidorNovo.address().port}`;
+
+    const novo = new Cliente(urlNova);
+    const senhaPadrao = await novo.login('admin', 'admin123');
+    assert.equal(senhaPadrao.status, 401, 'a senha padrão não volta depois da atualização');
+    const senhaEscolhida = await novo.login('admin', 'senhaAtualizada1');
+    assert.equal(senhaEscolhida.status, 200, 'a senha do usuário sobrevive à atualização');
+
+    const lista = await novo.enviar('GET', '/api/alunos?q=Atualizacao Por Cima');
+    assert.equal(lista.json.total, 1, 'o cadastro feito antes da atualização continua lá');
+    const detalhe = await novo.enviar('GET', `/api/alunos/${lista.json.itens[0].id}`);
+    assert.equal(detalhe.status, 200);
+    assert.equal(detalhe.json.cpf, cpfNovo('993000001'), 'os dados do aluno não mudaram');
+    assert.equal(detalhe.json.data_nascimento, '2010-05-20');
+  } finally {
+    if (servidorAntigo) await new Promise((resolve) => servidorAntigo.close(resolve));
+    if (servidorNovo) await new Promise((resolve) => servidorNovo.close(resolve));
+    if (dbAntigo) dbAntigo.close();
+    if (dbNovo) dbNovo.close();
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
+  }
+});

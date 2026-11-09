@@ -2,7 +2,7 @@
 ; Compilar com: ISCC.exe instalador\HistoricoEscolar.iss
 
 #define NomeApp "Controle de Emissão de Histórico Escolar"
-#define Versao "1.1"
+#define Versao "1.2"
 
 [Setup]
 AppId={{8C2E5F41-7A9B-4D3E-B1C6-0A9E2F7D8B35}
@@ -64,3 +64,69 @@ Filename: "{app}\Iniciar.vbs"; Description: "Abrir o sistema agora"; Flags: shel
 
 [UninstallRun]
 Filename: "powershell.exe"; Parameters: "-NoProfile -WindowStyle Hidden -Command ""(Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue).OwningProcess | ForEach-Object {{ Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }}"""; RunOnceId: "Encerrar"; Flags: runhidden
+
+; ---------------------------------------------------------------
+; Atualização sem perder dados: instalar a versão nova POR CIMA da
+; antiga é a atualização (mesmo AppId -> mesma pasta -> a entrada de
+; desinstalar é atualizada, não duplicada). O pacote nunca leva
+; data\, pdfs\ nem backups\ (ver Excludes acima), então só os
+; arquivos do programa são substituídos; as pastas de dados ficam.
+; ---------------------------------------------------------------
+
+[Code]
+var
+  Atualizando: Boolean;
+  AvisoAtualizacaoExibido: Boolean;
+
+function InstalacaoAnterior(): Boolean;
+begin
+  // Chave de desinstalação da instalação anterior. O instalador roda sem
+  // admin (PrivilegesRequired=lowest), então a entrada fica em HKCU.
+  Result := RegKeyExists(HKCU,
+    'Software\Microsoft\Windows\CurrentVersion\Uninstall\{8C2E5F41-7A9B-4D3E-B1C6-0A9E2F7D8B35}_is1');
+end;
+
+function InitializeSetup(): Boolean;
+begin
+  Atualizando := InstalacaoAnterior();
+  AvisoAtualizacaoExibido := False;
+  Result := True;
+end;
+
+// Para o servidor que estiver rodando antes de copiar por cima — node.exe
+// em uso derrubaria a atualização no meio (mesma ação do [UninstallRun]).
+procedure EncerrarServidor();
+var
+  ResultCode: Integer;
+begin
+  Exec('powershell.exe',
+    '-NoProfile -WindowStyle Hidden -Command "(Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue).OwningProcess | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }"',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if CurPageID = wpReady then
+  begin
+    // {app} só é confiável depois que a página de destino foi escolhida.
+    if not Atualizando then
+      Atualizando := FileExists(ExpandConstant('{app}\server.js'));
+    if Atualizando and (not AvisoAtualizacaoExibido) then
+    begin
+      WizardForm.ReadyLabel.Caption :=
+        'Atualização do sistema instalado.' + #13#10 + #13#10 +
+        'Os arquivos do programa serão substituídos pela versão nova e a pasta ' +
+        'continua a mesma. Os dados serão mantidos: o banco (pasta data), os PDFs ' +
+        '(pasta pdfs) e os backups (pasta backups) não são tocados pelo instalador. ' +
+        'As migrações do banco rodam sozinhas na primeira abertura.' + #13#10 + #13#10 +
+        'Recomenda-se fazer um backup antes (menu Backup do sistema).';
+      AvisoAtualizacaoExibido := True;
+    end;
+  end;
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  EncerrarServidor();
+  Result := '';
+end;
