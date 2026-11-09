@@ -40,7 +40,7 @@ function rotasRelatorios({ db, config }) {
     return resposta.json({
       ...resultado,
       titulo: tituloRelatorio(configRelatorio, modelo),
-      filtrosTexto: descreverFiltros(configRelatorio),
+      filtrosTexto: descreverFiltros(configRelatorio, { db }),
     });
   });
 
@@ -54,7 +54,7 @@ function rotasRelatorios({ db, config }) {
 
       const buffer = await gerarPdfRelatorio({
         titulo: tituloRelatorio(configRelatorio, modelo),
-        filtrosTexto: descreverFiltros(configRelatorio),
+        filtrosTexto: descreverFiltros(configRelatorio, { db }),
         colunas: resultado.colunas,
         linhas: resultado.linhas,
         totais: resultado.totais,

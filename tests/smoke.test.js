@@ -3603,6 +3603,90 @@ test('relatórios: valida fonte, campos, filtros e agrupamento', async () => {
   assert.equal(modelo.json.titulo, 'Mapa de Alunos');
 });
 
+test('relatórios: alunos por turma — turma escolhida, todas agrupadas e PDF', async () => {
+  const admin = new Cliente(base);
+  await admin.login('admin', 'admin123');
+
+  const t1 = await admin.enviar('POST', '/api/turmas', turmaCadastro({ sigla: 'APTA-A' }));
+  assert.equal(t1.status, 201, JSON.stringify(t1.json));
+  const t2 = await admin.enviar('POST', '/api/turmas', turmaCadastro({ sigla: 'APTA-B' }));
+  assert.equal(t2.status, 201, JSON.stringify(t2.json));
+
+  const criados = [];
+  const turmas = [t1, t1, t2];
+  for (let i = 0; i < turmas.length; i += 1) {
+    const aluno = await admin.enviar('POST', '/api/alunos', alunoCadastro({
+      nome: `Aluno Por Turma ${i + 1}`,
+      cpf: cpfNovo(`99310000${i + 1}`),
+    }));
+    assert.equal(aluno.status, 201, JSON.stringify(aluno.json));
+    criados.push(aluno.json.id);
+    const matricula = await admin.enviar('POST', '/api/matriculas', {
+      aluno_id: aluno.json.id, turma_id: turmas[i].json.id, data_inicio: '2026-02-10',
+    });
+    assert.equal(matricula.status, 201, JSON.stringify(matricula.json));
+  }
+
+  const campos = ['nome', 'cpf', 'turma', 'turno', 'ano_escolaridade', 'data_nascimento',
+    'idade', 'sexo', 'responsavel_nome', 'responsavel_telefone', 'matricula', 'status'];
+
+  try {
+    // O modelo pronto aparece no catálogo.
+    const cat = await admin.enviar('GET', '/api/relatorios/catalogo');
+    const pronto = cat.json.modelos.find((m) => m.id === 'alunos_por_turma');
+    assert.ok(pronto, 'modelo alunos_por_turma presente');
+    assert.equal(pronto.config.fonte, 'alunos');
+    assert.equal(pronto.config.agrupar, 'turma');
+    const fonteAlunos = cat.json.fontes.find((f) => f.id === 'alunos');
+    assert.equal(fonteAlunos.filtros.find((f) => f.id === 'turma_id').rotulo, 'Turma');
+
+    // 1) Turma escolhida: só os alunos dela (2), com a sigla no cabeçalho.
+    const porTurma = await admin.enviar('POST', '/api/relatorios/preview', {
+      modelo: 'alunos_por_turma',
+      config: { fonte: 'alunos', campos, filtros: { turma_id: t1.json.id }, agrupar: 'turma', ordenar: 'nome:asc' },
+    });
+    assert.equal(porTurma.status, 200, JSON.stringify(porTurma.json));
+    assert.equal(porTurma.json.titulo, 'Alunos por Turma');
+    assert.ok(porTurma.json.filtrosTexto.some((t) => /^Turma: APTA-A · \d{4}$/.test(t)),
+      `cabeçalho mostra a sigla: ${JSON.stringify(porTurma.json.filtrosTexto)}`);
+    const nomesT1 = porTurma.json.linhas.filter((l) => l.tipo === 'linha').map((l) => l.celulas[0]).sort();
+    assert.deepEqual(nomesT1, ['Aluno Por Turma 1', 'Aluno Por Turma 2'], 'só os 2 alunos da turma A');
+
+    // 2) Sem filtro (todas as turmas): todos os alunos, agrupados por turma,
+    //    sem colapsar — cada turma com as suas linhas sob o cabeçalho.
+    const todos = await admin.enviar('POST', '/api/relatorios/preview', {
+      modelo: 'alunos_por_turma',
+      config: { fonte: 'alunos', campos, filtros: {}, agrupar: 'turma', ordenar: 'nome:asc' },
+    });
+    assert.equal(todos.status, 200, JSON.stringify(todos.json));
+    const soNomes = todos.json.linhas.filter((l) => l.tipo === 'linha'
+      && /Aluno Por Turma/.test(l.celulas[0]));
+    assert.equal(soNomes.length, 3, 'agrupar não colapsa as linhas (regressão do GROUP BY)');
+    const grupos = todos.json.linhas.filter((l) => l.tipo === 'grupo').map((l) => l.valor);
+    assert.ok(grupos.includes('APTA-A') && grupos.includes('APTA-B'),
+      `as duas turmas viram cabeçalho: ${JSON.stringify(grupos)}`);
+    // Cabeçalho imediatamente antes do primeiro aluno de cada turma.
+    const sequencia = todos.json.linhas;
+    const primeiraT2 = sequencia.findIndex((l) => l.tipo === 'linha' && l.celulas[0] === 'Aluno Por Turma 3');
+    assert.equal(sequencia[primeiraT2 - 1].tipo, 'grupo');
+    assert.equal(sequencia[primeiraT2 - 1].valor, 'APTA-B');
+
+    // 3) PDF da turma escolhida.
+    const pdf = await admin.enviar('POST', '/api/relatorios/pdf', {
+      modelo: 'alunos_por_turma',
+      config: { fonte: 'alunos', campos, filtros: { turma_id: t1.json.id }, agrupar: 'turma', ordenar: 'nome:asc' },
+    });
+    assert.equal(pdf.status, 200, pdf.texto.slice(0, 200));
+    assert.match(pdf.headers.get('content-type'), /application\/pdf/);
+    assert.ok(pdf.texto.startsWith('%PDF-'));
+  } finally {
+    // Excluir o aluno remove a matrícula em cascata (não há DELETE de matrícula).
+    for (const id of criados) await admin.enviar('DELETE', `/api/alunos/${id}`, { confirmar: true });
+    await admin.enviar('DELETE', `/api/turmas/${t1.json.id}`, { confirmar: true });
+    await admin.enviar('DELETE', `/api/turmas/${t2.json.id}`, { confirmar: true });
+  }
+});
+
 /* ---------------- encerramento do ano letivo ---------------- */
 
 // CPF novo e válido (dígitos verificadores calculados) para os alunos de teste.

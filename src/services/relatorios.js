@@ -454,6 +454,8 @@ function formatarValor(valor, formato) {
 
 // Monta e executa a consulta. Fontes com GROUP BY próprio (consolidação)
 // recebem o WHERE antes do GROUP BY; as demais recebem WHERE ao final.
+// Agrupamento NÃO usa GROUP BY (isso colapsaria as linhas — só 1 por grupo):
+// ele ordena pela chave do grupo e o `consultar` insere os cabeçalhos.
 function montarSql(fonte, where, agrupavelDef, ordenacao, limiteSql) {
   const condicao = where.length > 0 ? where.map((w) => `(${w})`).join(' AND ') : '';
   const temGroupByInterno = /\bGROUP BY\b/i.test(fonte.sql);
@@ -465,8 +467,21 @@ function montarSql(fonte, where, agrupavelDef, ordenacao, limiteSql) {
       sql = `${sql} WHERE ${condicao}`;
     }
   }
-  if (agrupavelDef && !temGroupByInterno) sql = `${sql} GROUP BY ${agrupavelDef.col}`;
-  sql = `${sql} ORDER BY ${ordenacao} LIMIT ${limiteSql}`;
+  let ordenarFinal = ordenacao;
+  if (agrupavelDef && !temGroupByInterno) {
+    // Prefixa a chave do grupo para as linhas do mesmo grupo ficarem juntas
+    // (o cabeçalho de grupo só é emitido quando a chave muda). `_grupo:desc`
+    // já ordena pelo grupo — nesse caso o grupo fica à frente com a direção
+    // pedida e a ordenação padrão entra como desempate.
+    const chave = `${agrupavelDef.ordenar} ASC`;
+    const chaveDesc = `${agrupavelDef.ordenar} DESC`;
+    if (ordenacao === chave || ordenacao === chaveDesc) {
+      ordenarFinal = `${ordenacao}, ${fonte.orderByPadrao}`;
+    } else {
+      ordenarFinal = `${chave}, ${ordenacao}`;
+    }
+  }
+  sql = `${sql} ORDER BY ${ordenarFinal} LIMIT ${limiteSql}`;
   return sql;
 }
 
@@ -554,6 +569,17 @@ const MODELOS = [
     },
   },
   {
+    id: 'alunos_por_turma',
+    rotulo: 'Alunos por Turma',
+    descricao: 'Lista os alunos de uma turma (filtro Turma) ou de todas as '
+      + 'turmas separadamente (sem filtro), com prévia e PDF.',
+    config: {
+      fonte: 'alunos',
+      campos: ['nome', 'cpf', 'turma', 'turno', 'ano_escolaridade', 'data_nascimento', 'idade', 'sexo', 'responsavel_nome', 'responsavel_telefone', 'matricula', 'status'],
+      filtros: {}, agrupar: 'turma', ordenar: 'nome:asc',
+    },
+  },
+  {
     id: 'quadro_turmas',
     rotulo: 'Quadro de Turmas',
     descricao: 'Turmas do ano com nº de alunos e professores.',
@@ -626,7 +652,7 @@ const MODELOS = [
 ];
 
 const ROTULOS_FILTRO = {
-  busca: 'Busca por nome', turma_id: 'Turma (id)', matriz: 'Matriz', turno: 'Turno',
+  busca: 'Busca por nome', turma_id: 'Turma', matriz: 'Matriz', turno: 'Turno',
   tipo_turma: 'Tipo de turma (NAI/NAF)', ano_letivo: 'Ano letivo', status: 'Status',
   sexo: 'Sexo', zona: 'Zona residencial', idade_min: 'Idade mínima', idade_max: 'Idade máxima',
   deficiencia: 'Com deficiência', beneficio: 'Com benefício social', pos_censo: 'Pós-censo',
@@ -657,8 +683,9 @@ function modeloPorId(id) {
   return MODELOS.find((m) => m.id === id) || null;
 }
 
-// Filtros legíveis para o cabeçalho do PDF.
-function descreverFiltros(config) {
+// Filtros legíveis para o cabeçalho do PDF. Com `db`, ids de turma viram a
+// sigla (em vez do número cru).
+function descreverFiltros(config, { db } = {}) {
   const fonte = FONTES[config.fonte];
   if (!fonte) return [];
   const partes = [];
@@ -666,7 +693,10 @@ function descreverFiltros(config) {
     if (valor === undefined || valor === null || valor === '') continue;
     const rotulo = ROTULOS_FILTRO[id] || id;
     let v = valor;
-    if (typeof valor === 'boolean' || valor === 'true' || valor === 'false') {
+    if (id === 'turma_id' && db) {
+      const turma = db.prepare('SELECT sigla, ano_letivo FROM turmas WHERE id = ?').get(Number(valor));
+      if (turma) v = `${turma.sigla} · ${turma.ano_letivo}`;
+    } else if (typeof valor === 'boolean' || valor === 'true' || valor === 'false') {
       v = (valor === true || valor === 'true') ? 'Sim' : 'Não';
     } else if (fonte.filtros[id] && fonte.filtros[id].tipo === 'data') {
       v = String(valor).split('-').reverse().join('/');

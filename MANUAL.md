@@ -15,7 +15,7 @@ Aplicação local para controlar a emissão e entrega de Históricos Escolar de 
 - **Tela inicial com as pendências do dia** (filas, devendo histórico e renovação de matrícula)
 - **Enturmações:** matrícula individual ou em lote, Diário da turma e alocação de professores por período
 - **Documentos em Word (.docx):** Ficha de Matrícula e Declaração Escolar (individual ou **em lote da turma, em ZIP**), gerados a partir dos modelos oficiais
-- **Relatórios** com prévia em tela e geração de PDF (Matrículas Pós-Censo, Quadro de Turmas, Mapa de Alunos…)
+- **Relatórios** com prévia em tela e geração de PDF (Alunos por Turma, Matrículas Pós-Censo, Quadro de Turmas, Mapa de Alunos…)
 - **Encerramento do ano letivo:** fechar/reabrir turma registrando a situação final de cada aluno
 - **Calendário do ano letivo** (PDF anexado pelo administrador)
 - Cadastro de usuários com perfis (administrador / operador)
@@ -207,8 +207,12 @@ Aba **Devendo Histórico**: alunos que ficaram com um histórico em pendência (
 
 ### 4.11 Relatórios
 
-Escolha um **modelo pronto** (Matrículas Pós-Censo, Quadro de Turmas, Mapa de Alunos, **Renovação de Matrícula**…) ou monte do zero: **fonte de dados**, **campos**, **filtros**, **agrupar por** e **ordenar**.
+Escolha um **modelo pronto** (Matrículas Pós-Censo, Quadro de Turmas, Mapa de Alunos, **Alunos por Turma**, **Renovação de Matrícula**…) ou monte do zero: **fonte de dados**, **campos**, **filtros**, **agrupar por** e **ordenar**.
 
+- O modelo **Alunos por Turma** lista todos os alunos com dados cadastrais, matrícula e responsável:
+  - **Turma escolhida:** no filtro **Turma**, selecione a turma no combo (mostra sigla, ano, série e turno) — a prévia e o PDF saem só com os alunos dela, e o cabeçalho do relatório identifica a turma pela sigla.
+  - **Todas as turmas separadamente:** deixe o filtro em **— Todas as turmas —** (padrão do modelo). O agrupamento por turma coloca um cabeçalho com a sigla de cada turma e, abaixo, os alunos daquela turma em ordem alfabética — todas as turmas no mesmo relatório, separadas.
+  - Prévia e **Baixar PDF** funcionam igual aos demais relatórios.
 - O modelo **Renovação de Matrícula** lista os alunos do ano de referência com *Renovou* (Sim/Não) e *Data da renovação*; o filtro **Renovou = Não** deixa em mãos a lista de quem ainda falta cobrar (seção 4.10.1).
 
 - **Gerar prévia** mostra até 100 linhas na tela (com linhas de grupo e totais quando o campo soma) e avisa se o relatório é maior.
@@ -399,13 +403,13 @@ historico-escolar/
 ### 9.6 Testes
 
 ```bat
-node --test tests/smoke.test.js   # testes de API (83)
-npx playwright test               # testes de interface (40; usa a porta 3100)
+node --test tests/smoke.test.js   # testes de API (84)
+npx playwright test               # testes de interface (41; usa a porta 3100)
 ```
 
 - Na primeira vez, instalar o navegador dos testes: `npx playwright install chromium`.
 - `npm test` roda a descoberta padrão do Node (`node --test`).
-- Cobrem: login/permissões, pedidos e regra de datas, cadastros, **importação e exportação CSV** (round-trip), matrículas e lote, diário, **declarações em lote (ZIP)**, transferências/retornos, pós-censo, alocação de professores, documentos em Word (ficha e declaração), relatórios (prévia e PDF), **encerramento do ano letivo**, **migração em lote para o novo ano**, **painel inicial de pendências**, **atualização sem perder dados** (contrato de empacotamento do instalador + reabertura do banco) e o rodapé **Sobre**.
+- Cobrem: login/permissões, pedidos e regra de datas, cadastros, **importação e exportação CSV** (round-trip), matrículas e lote, diário, **declarações em lote (ZIP)**, transferências/retornos, pós-censo, alocação de professores, documentos em Word (ficha e declaração), relatórios (prévia e PDF, **alunos por turma com filtro em combo e agrupamento sem colapso de linhas**), **encerramento do ano letivo**, **migração em lote para o novo ano**, **painel inicial de pendências**, **atualização sem perder dados** (contrato de empacotamento do instalador + reabertura do banco) e o rodapé **Sobre**.
 - Os testes de interface sobem o próprio servidor E2E em `localhost:3100` com banco temporário — deixe a porta 3100 livre.
 
 ---

@@ -41,7 +41,7 @@
     reabrirAno: { ano: null, turmaId: null, dados: null },
     migracao: { origemId: null, destinoId: null, dados: null },
     renovacao: { ano: null, itens: [] },
-    relatorios: { catalogo: null, modelo: null },
+    relatorios: { catalogo: null, modelo: null, turmas: [] },
   };
 
   const MAPA_CAMPOS = {
@@ -4348,6 +4348,10 @@
       }
       const cat = estado.relatorios.catalogo;
 
+      // Combos do filtro "Turma" (fonte alunos) — recarrega a cada abertura
+      // para refletir turmas criadas/excluídas.
+      estado.relatorios.turmas = (await api('GET', '/api/turmas?porPagina=500')).itens || [];
+
       $('#relatorio-fonte').innerHTML = '<option value="" disabled selected>Selecione…</option>'
         + cat.fontes.map((f) => `<option value="${esc(f.id)}">${esc(f.rotulo)}</option>`).join('');
       $('#relatorio-modelo').innerHTML = '<option value="">— Em branco —</option>'
@@ -4390,6 +4394,14 @@
           + '<option value="">—</option><option value="true">Sim</option><option value="false">Não</option></select>';
       } else if (f.tipo === 'data') {
         controle = `<input type="date" id="${idCampo}" data-filtro="${esc(f.id)}" data-tipo="data">`;
+      } else if (f.id === 'turma_id') {
+        // Turma vira combo (o id numérico era inutilizável na mão).
+        // Vazio = todas as turmas — o relatório agrupa por turma.
+        const turmas = estado.relatorios.turmas || [];
+        controle = `<select id="${idCampo}" data-filtro="${esc(f.id)}" data-tipo="inteiro">`
+          + '<option value="">— Todas as turmas —</option>'
+          + turmas.map((t) => `<option value="${t.id}">${esc(t.sigla)} — ${t.ano_letivo} · ${esc(t.ano_escolaridade)} · ${esc(t.turno)}</option>`).join('')
+          + '</select>';
       } else if (f.tipo === 'inteiro') {
         controle = `<input type="number" step="1" id="${idCampo}" data-filtro="${esc(f.id)}" data-tipo="inteiro">`;
       } else {
