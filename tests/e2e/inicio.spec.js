@@ -7,6 +7,9 @@ const { COLUNAS: COLUNAS_FUNCIONARIOS } = require('../../src/routes/funcionarios
 const NOME_ALUNO = 'Aluno Inicio E2E';
 const CPF_ALUNO = '991.000.000-86';
 const SIGLA_TURMA = 'INICIO-01';
+// Segundo aluno, criado sem matrícula, para o caminho de erro da ficha.
+const NOME_SEM_MATRICULA = 'Aluno Sem Matricula E2E';
+const CPF_SEM_MATRICULA = '991.000.004-00';
 
 function alunoInicio() {
   return {
@@ -44,6 +47,9 @@ test.afterAll(async ({ browser }) => {
       await apiDelete(context, csrf, `/api/turmas/${t.id}`);
     }
     for (const a of await acharItens(context, '/api/alunos', NOME_ALUNO)) {
+      await apiDelete(context, csrf, `/api/alunos/${a.id}`);
+    }
+    for (const a of await acharItens(context, '/api/alunos', NOME_SEM_MATRICULA)) {
       await apiDelete(context, csrf, `/api/alunos/${a.id}`);
     }
   } finally {
@@ -141,10 +147,11 @@ test('atalhos do Início: emitir declaração do aluno e novo aluno', async ({ p
   await page.goto('/');
   await expect(page.locator('#tela-app')).toBeVisible();
 
-  // Seção "Ações rápidas" com os dois atalhos.
-  await expect(page.locator('#inicio-atalhos .inicio-cartao')).toHaveCount(2);
+  // Seção "Ações rápidas" com os três atalhos.
+  await expect(page.locator('#inicio-atalhos .inicio-cartao')).toHaveCount(3);
   await expect(page.locator('#inicio-atalhos [data-atalho="declaracao"]')).toBeVisible();
   await expect(page.locator('#inicio-atalhos [data-atalho="novo-aluno"]')).toBeVisible();
+  await expect(page.locator('#inicio-atalhos [data-atalho="ficha"]')).toBeVisible();
 
   // Atalho "Emitir declaração" → painel de escolha do aluno → mesmo modal do Diário.
   await page.click('#inicio-atalhos [data-atalho="declaracao"]');
@@ -178,4 +185,77 @@ test('atalhos do Início: emitir declaração do aluno e novo aluno', async ({ p
   // O menu lateral também ganhou a entrada "Emitir declaração".
   await page.click('.aba[data-painel="declaracao"]');
   await expect(page.locator('#painel-declaracao')).toBeVisible();
+});
+
+test('atalho do Início: gerar ficha de matrícula do aluno sem sair da tela', async ({ page, context }) => {
+  const csrf = await apiLogin(context);
+
+  // Reaproveita aluno/turma/matrícula do teste anterior do arquivo.
+  let aluno = (await acharItens(context, '/api/alunos', NOME_ALUNO))[0];
+  if (!aluno) aluno = await apiPost(context, csrf, '/api/alunos', alunoInicio());
+  let turma = (await acharItens(context, '/api/turmas', SIGLA_TURMA))[0];
+  if (!turma) {
+    turma = await apiPost(context, csrf, '/api/turmas', {
+      ano_letivo: new Date().getFullYear(),
+      matriz: 'Ensino Fundamental (Anos Iniciais)',
+      ano_escolaridade: '5º ano',
+      sigla: SIGLA_TURMA,
+      turno: 'Manhã',
+      tipo_turma: 'NAI',
+    });
+  }
+  const matriculas = await (await context.request.get(`/api/matriculas?aluno_id=${aluno.id}`)).json();
+  if (!(matriculas.itens || []).length) {
+    await apiPost(context, csrf, '/api/matriculas', {
+      aluno_id: aluno.id, turma_id: turma.id, data_inicio: '2026-02-10',
+    });
+  }
+
+  await page.goto('/');
+  await expect(page.locator('#tela-app')).toBeVisible();
+
+  // Atalho "Gerar ficha de matrícula" → painel de escolha do aluno.
+  await page.click('#inicio-atalhos [data-atalho="ficha"]');
+  await expect(page.locator('#painel-ficha')).toBeVisible();
+  await expect(page.locator('#painel-inicio')).toBeHidden();
+
+  // Mesmo aluno do Diário: busca, escolha e download direto (sem modal).
+  await page.fill('#busca-ficha', NOME_ALUNO);
+  const linha = page.locator('#corpo-ficha tr', { hasText: NOME_ALUNO });
+  await expect(linha).toBeVisible();
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    linha.getByRole('button', { name: 'Gerar Ficha' }).click(),
+  ]);
+  expect(download.suggestedFilename()).toMatch(/^ficha-matricula-aluno-inicio-e2e\.docx$/);
+
+  // A entrada no menu lateral abre o mesmo painel.
+  await page.click('.aba[data-painel="ficha"]');
+  await expect(page.locator('#painel-ficha')).toBeVisible();
+
+  // Aluno sem matrícula: aviso de erro, nenhum arquivo baixado.
+  let semMatricula = (await acharItens(context, '/api/alunos', NOME_SEM_MATRICULA))[0];
+  if (!semMatricula) {
+    semMatricula = await apiPost(context, csrf, '/api/alunos', {
+      ...alunoInicio(),
+      nome: NOME_SEM_MATRICULA,
+      cpf: CPF_SEM_MATRICULA,
+    });
+  }
+  await page.fill('#busca-ficha', NOME_SEM_MATRICULA);
+  const linhaSem = page.locator('#corpo-ficha tr', { hasText: NOME_SEM_MATRICULA });
+  await expect(linhaSem).toBeVisible();
+  let baixou = false;
+  try {
+    await Promise.all([
+      page.waitForEvent('download', { timeout: 3000 }),
+      linhaSem.getByRole('button', { name: 'Gerar Ficha' }).click(),
+    ]);
+    baixou = true;
+  } catch {
+    baixou = false;
+  }
+  expect(baixou).toBeFalsy();
+  await expect(page.locator('#notificacoes .aviso.erro').last())
+    .toContainText('não possui matrícula');
 });

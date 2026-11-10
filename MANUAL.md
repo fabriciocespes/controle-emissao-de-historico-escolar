@@ -13,7 +13,7 @@ Aplicação local para controlar a emissão e entrega de Históricos Escolar de 
 - **Cadastros** de alunos (CPF validado, filiação, responsável, deficiências/CID), funcionários/professores e turmas
 - **Exportação CSV** dos alunos e dos funcionários (mesmo layout da importação — abre no Excel e volta a importar sem ajustes)
 - **Tela inicial com as pendências do dia** (filas, devendo histórico e renovação de matrícula)
-- **Enturmações:** matrícula individual ou em lote, Diário da turma e alocação de professores por período
+- **Enturmações:** matrícula individual ou em lote, Diário da turma, **geração de ficha de matrícula por aluno** e alocação de professores por período
 - **Documentos em Word (.docx):** Ficha de Matrícula e Declaração Escolar (individual ou **em lote da turma, em ZIP**), gerados a partir dos modelos oficiais
 - **Relatórios** com prévia em tela e geração de PDF (Alunos por Turma, Matrículas Pós-Censo, Quadro de Turmas, Mapa de Alunos…)
 - **Encerramento do ano letivo:** fechar/reabrir turma registrando a situação final de cada aluno
@@ -107,12 +107,13 @@ Ao entrar no sistema a primeira tela é o **Início** (também acessível pelo b
 - **Renovação:** o ano exibido é o do período letivo vigente (hoje entre as datas de início e término em *Administração*); fora do período, o ano corrente.
 - Disponível para administrador e operador.
 
-Abaixo dos cartões há a seção **Ações rápidas**, com dois atalhos:
+Abaixo dos cartões há a seção **Ações rápidas**, com três atalhos:
 
 | Atalho | O que faz |
 |---|---|
 | **Emitir declaração** | Abre a tela *Emitir declaração* (menu **Histórico Escolar**): busque o aluno por nome ou CPF e clique em **Gerar Declaração** — abre o mesmo modal de declaração usado no Diário e baixa o `.docx`. |
 | **Novo aluno** | Abre a mesma modal do botão **+ Novo aluno** da tela *Cadastro de alunos*, já com o cursor no campo Nome (cadastro e matrícula em seguida). |
+| **Gerar ficha de matrícula** | Abre a tela *Gerar ficha de matrícula* (menu **Enturmações**): busque o aluno por nome ou CPF e clique em **Gerar Ficha** — baixa o `.docx` direto, usando a **matrícula ativa** do aluno (sem modal). Aluno sem matrícula recebe aviso de erro. |
 
 ### 4.1 Cabeçalho da escola (acima do menu)
 
@@ -189,6 +190,7 @@ Aba **Devendo Histórico**: alunos que ficaram com um histórico em pendência (
 
 - **Matrícula:** matricule alunos existentes (busca + **Matricular selecionados** para vários de uma vez, em lote) ou cadastre um aluno novo já com matrícula (**+ Inserir Aluno Novo**). A matrícula gera **número automático** e impede o mesmo aluno duas vezes na mesma turma. Alunos matriculados após a Data Base CENSO ficam marcados como **Matriculado pós-censo**.
 - **Diário:** escolha ano letivo e turma para ver os alunos em ordem alfabética com a situação (matriculado, transferido, deixou de frequentar, pós-censo, retorno). Daqui saem as ações de **transferir**, **deixou de frequentar** e **desfazer**, o botão **Gerar Ficha Matrícula** (Word), o botão **Declarações em lote (.zip)** (seção 4.12) e a remoção do aluno da turma (devolve à lista de matrícula). O botão de lote só aparece depois que a turma é escolhida.
+- **Ficha de matrícula sem passar pelo Diário:** o menu **Enturmações → Gerar ficha de matrícula** (ou o atalho **Gerar ficha de matrícula** do **Início**) lista os alunos com busca por nome/CPF e gera o mesmo `.docx` com um clique em **Gerar Ficha**. O sistema escolhe sozinho a matrícula do aluno: a **ativa** (matriculado) de maior ano letivo; sem matrícula ativa, usa a mantida no Diário (transferido/deixou de frequentar). Aluno sem nenhuma matrícula recebe o aviso *“Este aluno não possui matrícula para gerar a ficha.”*
 - **Professor (alocação):** associe professores às turmas com **período (início e fim)**. O sistema **impede conflito de turno** para a mesma pessoa (CPF) e exige data de inativação para inativar um professor alocado. Exclusão da alocação: administrador.
 
 ### 4.10 Ano letivo: Calendário, Fechar, Reabrir, Migrar e Renovar
@@ -427,12 +429,12 @@ historico-escolar/
 
 ```bat
 node --test tests/smoke.test.js   # testes de API (85)
-npx playwright test               # testes de interface (42; usa a porta 3100)
+npx playwright test               # testes de interface (43; usa a porta 3100)
 ```
 
 - Na primeira vez, instalar o navegador dos testes: `npx playwright install chromium`.
 - `npm test` roda a descoberta padrão do Node (`node --test`).
-- Cobrem: login/permissões, pedidos e regra de datas, cadastros, **importação e exportação CSV** (round-trip), matrículas e lote, diário, **declarações em lote (ZIP)**, transferências/retornos, pós-censo, alocação de professores, documentos em Word (ficha e declaração), relatórios (prévia e PDF, **alunos por turma com filtro em combo e agrupamento sem colapso de linhas**), **encerramento do ano letivo**, **migração em lote para o novo ano**, **painel inicial de pendências** (incluindo os **atalhos de emitir declaração e novo aluno**), **atualização sem perder dados** (contrato de empacotamento do instalador + reabertura do banco) e a **pré-checagem da compilação do instalador** (node_modules e node.exe) e o rodapé **Sobre**.
+- Cobrem: login/permissões, pedidos e regra de datas, cadastros, **importação e exportação CSV** (round-trip), matrículas e lote, diário, **declarações em lote (ZIP)**, transferências/retornos, pós-censo, alocação de professores, documentos em Word (ficha e declaração), relatórios (prévia e PDF, **alunos por turma com filtro em combo e agrupamento sem colapso de linhas**), **encerramento do ano letivo**, **migração em lote para o novo ano**, **painel inicial de pendências** (incluindo os **atalhos de emitir declaração, novo aluno e gerar ficha de matrícula**), **atualização sem perder dados** (contrato de empacotamento do instalador + reabertura do banco) e a **pré-checagem da compilação do instalador** (node_modules e node.exe) e o rodapé **Sobre**.
 - Os testes de interface sobem o próprio servidor E2E em `localhost:3100` com banco temporário — deixe a porta 3100 livre.
 
 ---

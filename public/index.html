@@ -79,6 +79,7 @@
       <p class="menu-grupo">Enturmações</p>
       <button type="button" class="aba" data-painel="matricula">Matrícula</button>
       <button type="button" class="aba" data-painel="diario">Diário</button>
+      <button type="button" class="aba" data-painel="ficha">Gerar ficha de matrícula</button>
       <button type="button" class="aba" data-painel="alocacoes">Professor <span class="badge azul" id="badge-alocacoes">0</span></button>
       <p class="menu-grupo">Relatórios</p>
       <button type="button" class="aba" data-painel="relatorios">Relatórios</button>
@@ -164,6 +165,17 @@
           </span>
           <span class="inicio-rotulo">Novo aluno</span>
           <span class="inicio-detalhe">Cadastrar aluno e matricular</span>
+        </button>
+        <button type="button" class="inicio-cartao" data-atalho="ficha">
+          <span class="inicio-icone ambar" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/>
+              <path d="M8 7h8"/><path d="M8 11h8"/><path d="M8 15h5"/>
+            </svg>
+          </span>
+          <span class="inicio-rotulo">Gerar ficha de matrícula</span>
+          <span class="inicio-detalhe">Escolher o aluno e baixar o .docx</span>
         </button>
       </div>
     </section>
@@ -316,6 +328,31 @@
         </table>
       </div>
       <p class="vazio" id="vazio-declaracao" hidden>Nenhum aluno encontrado.</p>
+    </section>
+
+    <section class="painel" id="painel-ficha" hidden>
+      <div class="barra">
+        <input class="busca" id="busca-ficha" type="search"
+               placeholder="Buscar aluno por nome ou CPF">
+        <span class="secundario" style="margin:0">
+          Escolha o aluno e clique em <b>Gerar Ficha</b> — o mesmo modelo usado no Diário.
+        </span>
+      </div>
+      <div class="tabela-rolagem">
+        <table>
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>CPF</th>
+              <th>Nascimento</th>
+              <th>Responsável</th>
+              <th class="acao">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="corpo-ficha"></tbody>
+        </table>
+      </div>
+      <p class="vazio" id="vazio-ficha" hidden>Nenhum aluno encontrado.</p>
     </section>
 
     <section class="painel" id="painel-alunos" hidden>

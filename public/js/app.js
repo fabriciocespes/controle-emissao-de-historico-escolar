@@ -24,7 +24,7 @@
     usuario: null,
     csrf: null,
     painel: 'calendario',
-    buscas: { confeccionar: '', prontos: '', entregues: '', devendo: '', declaracao: '', usuarios: '', alunos: '', funcionarios: '', turmas: '', alocacoes: '', renovacao: '' },
+    buscas: { confeccionar: '', prontos: '', entregues: '', devendo: '', declaracao: '', ficha: '', usuarios: '', alunos: '', funcionarios: '', turmas: '', alocacoes: '', renovacao: '' },
     pedido: null,
     pedidoEdicao: null,
     usuarioEdicao: null,
@@ -34,7 +34,7 @@
     alocacoes: { turmas: [], professores: [] },
     alocacaoTurmaId: null,
     escola: null,
-    listas: { alunos: [], matricula: [], funcionarios: [], turmas: [], declaracao: [] },
+    listas: { alunos: [], matricula: [], funcionarios: [], turmas: [], declaracao: [], ficha: [] },
     matriculaLote: { ids: new Set(), selecionados: new Map() },
     diario: { turmaId: null, dados: null },
     fecharAno: { ano: null, turmaId: null, dados: null },
@@ -278,7 +278,7 @@
   function abrirPainel(nome) {
     estado.painel = nome;
     $$('.aba').forEach((a) => a.classList.toggle('ativa', a.dataset.painel === nome));
-    ['inicio', 'calendario', 'fechar-ano', 'reabrir-ano', 'migracao', 'renovacao', 'confeccionar', 'prontos', 'entregues', 'devendo', 'declaracao', 'alunos', 'matricula', 'diario', 'funcionarios', 'turmas', 'alocacoes', 'usuarios', 'administracao', 'backup', 'relatorios'].forEach((p) => {
+    ['inicio', 'calendario', 'fechar-ano', 'reabrir-ano', 'migracao', 'renovacao', 'confeccionar', 'prontos', 'entregues', 'devendo', 'declaracao', 'ficha', 'alunos', 'matricula', 'diario', 'funcionarios', 'turmas', 'alocacoes', 'usuarios', 'administracao', 'backup', 'relatorios'].forEach((p) => {
       $(`#painel-${p}`).hidden = p !== nome;
     });
     carregarPainel();
@@ -303,6 +303,7 @@
     if (estado.painel === 'relatorios') return carregarRelatorios();
     if (estado.painel === 'devendo') return carregarDevendo();
     if (estado.painel === 'declaracao') return carregarDeclaracao();
+    if (estado.painel === 'ficha') return carregarFicha();
     return carregarPedidos();
   }
 
@@ -360,6 +361,7 @@
     const cartao = evento.target.closest('[data-atalho]');
     if (!cartao) return;
     if (cartao.dataset.atalho === 'declaracao') abrirPainel('declaracao');
+    if (cartao.dataset.atalho === 'ficha') abrirPainel('ficha');
     if (cartao.dataset.atalho === 'novo-aluno') abrirAlunoNovo();
   });
 
@@ -439,6 +441,62 @@
     }
     const acoes = analisarAcoesAluno(matriculas);
     abrirDeclaracao(item, acoes.ativa || acoes.transferida || acoes.deixou || matriculas[0]);
+  }
+
+  /* ---------------- gerar ficha de matrícula (atalho do Início) ---------------- */
+
+  async function carregarFicha() {
+    const busca = estado.buscas.ficha;
+    const parametros = new URLSearchParams();
+    if (busca) parametros.set('q', busca);
+    try {
+      const dados = await api('GET', `/api/alunos?${parametros.toString()}&porPagina=500`);
+      if (estado.painel !== 'ficha') return;
+      estado.listas.ficha = dados.itens;
+      renderizar('ficha', dados.itens);
+    } catch (e) {
+      if (e.status !== 401) notificar(e.message, 'erro');
+    }
+  }
+
+  // Matrícula usada na ficha: a ativa (matriculado) preferida; sem ela, a
+  // mantida no Diário (transferido/deixou) de maior ano letivo — a rota
+  // aceita exatamente essas. Sem nenhuma, o aluno não pode gerar ficha.
+  function melhorMatriculaFicha(matriculas) {
+    const mantida = (m) => TIPOS_TRANSFERENCIA.includes(m.status)
+      || m.status === 'deixou_frequentar';
+    const elegiveis = (matriculas || []).filter((m) => m.ativo || mantida(m));
+    if (!elegiveis.length) return null;
+    return elegiveis.sort((a, b) => {
+      const ativaA = a.status === 'matriculado' && a.ativo ? 1 : 0;
+      const ativaB = b.status === 'matriculado' && b.ativo ? 1 : 0;
+      return ativaB - ativaA ||
+        (Number(b.turma_ano_letivo) || 0) - (Number(a.turma_ano_letivo) || 0) ||
+        String(b.criado_em || '').localeCompare(String(a.criado_em || ''));
+    })[0];
+  }
+
+  async function emitirFichaAluno(id) {
+    const item = (estado.listas.ficha || []).find((a) => a.id === id);
+    if (!item) return;
+    let matriculas = [];
+    try {
+      const dados = await api('GET', `/api/matriculas?aluno_id=${id}`);
+      matriculas = dados.itens || [];
+    } catch (e) {
+      if (e.status !== 401) notificar(e.message, 'erro');
+      return;
+    }
+    const matricula = melhorMatriculaFicha(matriculas);
+    if (!matricula) {
+      notificar('Este aluno não possui matrícula para gerar a ficha.', 'erro');
+      return;
+    }
+    return baixarFichaMatricula({
+      matriculaId: matricula.id,
+      alunoId: id,
+      turmaId: matricula.turma_id,
+    });
   }
 
   let devendoItens = [];
@@ -652,6 +710,18 @@
         <td>${esc(p.responsavel_nome)}<span class="secundario">${esc(p.responsavel_parentesco)}</span></td>
         <td class="acao">
           <button type="button" class="btn mini primario" data-acao="emitir-declaracao" data-id="${id}">Gerar Declaração</button>
+        </td>
+      </tr>`;
+    }
+
+    if (painel === 'ficha') {
+      return `<tr>
+        <td class="negrito">${esc(p.nome)}</td>
+        <td>${esc(p.cpf)}</td>
+        <td>${esc(p.nascimento_br)}</td>
+        <td>${esc(p.responsavel_nome)}<span class="secundario">${esc(p.responsavel_parentesco)}</span></td>
+        <td class="acao">
+          <button type="button" class="btn mini primario" data-acao="emitir-ficha" data-id="${id}">Gerar Ficha</button>
         </td>
       </tr>`;
     }
@@ -1717,6 +1787,7 @@
   ligarBusca('#busca-alocacoes', 'alocacoes');
   ligarBusca('#busca-renovacao', 'renovacao');
   ligarBusca('#busca-declaracao', 'declaracao');
+  ligarBusca('#busca-ficha', 'ficha');
 
   /* ---------------- pedido ---------------- */
 
@@ -2074,6 +2145,7 @@
     if (botao.dataset.acao === 'editar-aluno') editarAluno(id);
     if (botao.dataset.acao === 'excluir-aluno') prepararExclusaoAluno(id);
     if (botao.dataset.acao === 'emitir-declaracao') emitirDeclaracaoAluno(id);
+    if (botao.dataset.acao === 'emitir-ficha') emitirFichaAluno(id);
     if (botao.dataset.acao === 'ficha-matricula') {
       baixarFichaMatricula({
         matriculaId: id,
