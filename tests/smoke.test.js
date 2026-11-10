@@ -3,6 +3,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'he-teste-'));
 process.env.PDF_ROOT = path.join(temp, 'pdfs');
@@ -5011,6 +5012,73 @@ test('instalador: pacote nunca leva dados e o AppId é o mesmo em todas as vers�
   assert.match(iss, /Atualização do sistema instalado/);
   assert.match(iss, /function PrepareToInstall/);
   assert.match(iss, /EncerrarServidor/);
+});
+
+// Compilar em OUTRA máquina quebrava com erros crípicos do próprio ISCC:
+// "No files found matching" quando faltava a pasta node_modules (linha 43 do
+// [Files]) e "Source file ... does not exist" quando o Node.js não estava em
+// C:\Program Files\nodejs (linha 44). Agora o script para na pré-checagem com
+// a instrução, e o instalador\compilar.bat resolve o ambiente sozinho.
+function acharIscc() {
+  const candidatos = [
+    path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Inno Setup 6', 'ISCC.exe'),
+    path.join(process.env.ProgramFiles || '', 'Inno Setup 6', 'ISCC.exe'),
+    path.join(process.env['ProgramFiles(x86)'] || '', 'Inno Setup 6', 'ISCC.exe'),
+  ];
+  return candidatos.find((c) => c && fs.existsSync(c)) || null;
+}
+
+test('instalador: pré-checagem da compilação explica o erro em vez de "no files found"', (t) => {
+  const pastaInstalador = path.join(__dirname, '..', 'instalador');
+  const iss = fs.readFileSync(path.join(pastaInstalador, 'HistoricoEscolar.iss'), 'utf8');
+
+  // O node.exe vem do parâmetro /DNodeExe — não há caminho fixo no [Files].
+  assert.match(iss, /#ifndef NodeExe/);
+  assert.match(iss, /Source: "\{#NodeExe\}";/);
+  assert.ok(!iss.includes('Source: "C:\\Program Files\\nodejs\\node.exe"'),
+    'o caminho fixo do node.exe saiu do script');
+
+  // As duas pré-checagens com instrução de correção.
+  assert.match(iss, /#error "Dependências não instaladas/);
+  assert.match(iss, /#error "node\.exe não encontrado/);
+
+  // O helper procura o Inno, o node_modules e o node.exe e repassa /DNodeExe.
+  const ps1 = fs.readFileSync(path.join(pastaInstalador, 'compilar.ps1'), 'utf8');
+  assert.match(ps1, /npm install --omit=dev/);
+  assert.match(ps1, /\/DNodeExe=\$node/);
+  assert.match(ps1, /ISCC\.exe/);
+  const bat = fs.readFileSync(path.join(pastaInstalador, 'compilar.bat'), 'utf8');
+  assert.match(bat, /compilar\.ps1/);
+
+  // Funcional: só roda de verdade com o Inno instalado.
+  const iscc = acharIscc();
+  if (!iscc) {
+    t.skip('Inno Setup 6 não instalado nesta máquina');
+    return;
+  }
+
+  // (a) árvore sem node_modules → para antes de comprimir, com a instrução.
+  const arvore = fs.mkdtempSync(path.join(os.tmpdir(), 'he-iss-'));
+  const destino = path.join(arvore, 'instalador');
+  fs.mkdirSync(destino, { recursive: true });
+  fs.copyFileSync(path.join(pastaInstalador, 'HistoricoEscolar.iss'),
+    path.join(destino, 'HistoricoEscolar.iss'));
+  const semDependencias = spawnSync(iscc, [path.join(destino, 'HistoricoEscolar.iss')],
+    { encoding: 'utf8' });
+  const saidaA = `${semDependencias.stdout}${semDependencias.stderr}`;
+  assert.notStrictEqual(semDependencias.status, 0, 'sem node_modules a compilação recusa');
+  assert.match(saidaA, /Depend/);
+  assert.match(saidaA, /node_modules/);
+  assert.match(saidaA, /npm install --omit=dev/);
+
+  // (b) node.exe em outro caminho (PC com Node fora do padrão) → instrução.
+  const semNode = spawnSync(iscc,
+    ['/DNodeExe=C:\\nao-existe\\node.exe', path.join(pastaInstalador, 'HistoricoEscolar.iss')],
+    { encoding: 'utf8' });
+  const saidaB = `${semNode.stdout}${semNode.stderr}`;
+  assert.notStrictEqual(semNode.status, 0, 'caminho de node.exe inválido recusa');
+  assert.match(saidaB, /node\.exe/);
+  assert.match(saidaB, /\/DNodeExe=/);
 });
 
 // Simula o fluxo de upgrade de ponta a ponta: mesma pasta de dados, código

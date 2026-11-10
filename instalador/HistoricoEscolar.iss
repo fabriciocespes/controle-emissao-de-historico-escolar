@@ -1,8 +1,26 @@
 ﻿; Script do instalador - Controle de Emissão de Histórico Escolar
-; Compilar com: ISCC.exe instalador\HistoricoEscolar.iss
+; Compilar com: instalador\compilar.bat  (recomendado — checa o ambiente e
+; resolve o caminho do node.exe)   ou   ISCC.exe instalador\HistoricoEscolar.iss
 
 #define NomeApp "Controle de Emissão de Histórico Escolar"
 #define Versao "1.2"
+
+; ---------------------------------------------------------------
+; Pré-checagens com mensagem clara. Sem elas o ISCC só diria
+; "No files found matching ..." (node_modules ausente, linha 43 do [Files]) ou
+; "Source file ... does not exist" (node.exe em outro caminho, linha 44) —
+; erros típicos ao compilar em outra máquina.
+; FileExists relativo resolve na pasta do script (igual aos Source:).
+; ---------------------------------------------------------------
+#ifndef NodeExe
+  #define NodeExe "C:\Program Files\nodejs\node.exe"
+#endif
+#if !FileExists(NodeExe)
+  #error "node.exe não encontrado. Instale o Node.js com o instalador padrão (em C:\Program Files\nodejs) ou informe o caminho do seu node.exe: ISCC.exe /DNodeExe=C:\caminho\node.exe instalador\HistoricoEscolar.iss — o instalador\compilar.bat faz isso sozinho."
+#endif
+#if !FileExists("..\node_modules\pdfkit\package.json")
+  #error "Dependências não instaladas: falta a pasta node_modules. Rode 'npm install --omit=dev' na pasta do projeto antes de compilar o instalador."
+#endif
 
 [Setup]
 AppId={{8C2E5F41-7A9B-4D3E-B1C6-0A9E2F7D8B35}
@@ -41,7 +59,7 @@ Name: "desktopicon"; Description: "Criar um ícone na área de trabalho"; GroupD
 ; própria, com exclusões só de dev (Playwright).
 Source: "..\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs; Excludes: "node_modules\*,backups\*,.git\*,.gitignore,.gitattributes,data\*,pdfs\*,tests\*,dist\*,instalador\*,temp_docx\*,planilhas\*,test-results\*,playwright-report\*,playwright.config.js,*.log,*.csv,*.pdf,*.db,listar-marcadores.js,testar-ficha.js,marcadores-lista.txt"
 Source: "..\node_modules\*"; DestDir: "{app}\node_modules"; Flags: ignoreversion recursesubdirs; Excludes: "@playwright\*,playwright\*,playwright-core\*,.bin\playwright*"
-Source: "C:\Program Files\nodejs\node.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#NodeExe}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Iniciar.vbs"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Encerrar.vbs"; DestDir: "{app}"; Flags: ignoreversion
 ; Modelos em branco da importação em lote (gerados por gerar-modelos.js

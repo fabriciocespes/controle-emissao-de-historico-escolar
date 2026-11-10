@@ -372,14 +372,30 @@ Agendador de Tarefas → nova tarefa "Iniciar ao logar" → executar:
 ### 9.4 Recompilar o instalador
 
 1. Instalar [Inno Setup 6](https://jrsoftware.org/isdl.php) (`winget install JRSoftware.InnoSetup`).
-2. Ter o Node.js em `C:\Program Files\nodejs\node.exe` (o instalador embute esse executável).
-3. Compilar:
+2. Ter as dependências do projeto instaladas: `npm install --omit=dev` (a pasta `node_modules` entra no pacote).
+3. Compilar com o helper (duplo clique em `instalador\compilar.bat`, ou no terminal):
+```bat
+instalador\compilar.bat
+```
+Ele procura o ISCC (instalação por usuário ou em `Program Files`), confere o `node_modules`, encontra o `node.exe` a embutir — inclusive fora de `C:\Program Files\nodejs`, caso comum em PC com Node instalado por usuário/nvm — e chama o ISCC com `/DNodeExe=`. Argumentos extras são repassados ao ISCC (ex.: `instalador\compilar.bat /Q` para compilar em silêncio).
+4. Saída: `dist\Instalador-HistoricoEscolar.exe`
+
+O comando direto também continua valendo:
 ```bat
 "%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe" instalador\HistoricoEscolar.iss
 ```
-4. Saída: `dist\Instalador-HistoricoEscolar.exe`
 
-O script tem uma seção `[Code]` de **atualização**: detecta a instalação anterior (chave de desinstalação em `HKCU` ou `server.js` já na pasta), encerra o servidor da porta 3000 antes de copiar por cima e mostra o aviso *"Atualização do sistema instalado"* na página de confirmação (seção 2.1). O `Excludes` da entrada principal mantém `data\`, `pdfs\` e `backups\` fora do pacote — contratado pelo teste *"instalador: pacote nunca leva dados…"* (seção 9.6).
+**Compilando em outro computador:** o mais simples é **copiar o `dist\Instalador-HistoricoEscolar.exe` já gerado** (27 MB) e instalar — não é preciso compilar lá. Se for compilar o código no outro PC, clone/cople o projeto e rode `npm install --omit=dev` antes.
+
+**Se a compilação falhar**, o script para na pré-checagem com a instrução de correção:
+
+| Mensagem | Causa e correção |
+|---|---|
+| `Dependências não instaladas: falta a pasta node_modules` | rode `npm install --omit=dev` na pasta do projeto |
+| `node.exe não encontrado` | o Node está fora do caminho padrão — use `instalador\compilar.bat` (resolve sozinho) ou passe o caminho: `ISCC.exe /DNodeExe=C:\caminho\node.exe instalador\HistoricoEscolar.iss` |
+| `No files found matching ...node_modules...` ou `Source file ... does not exist` | versão antiga do script, sem pré-checagem — atualize o projeto |
+
+O script tem uma seção `[Code]` de **atualização**: detecta a instalação anterior (chave de desinstalação em `HKCU` ou `server.js` já na pasta), encerra o servidor da porta 3000 antes de copiar por cima e mostra o aviso *"Atualização do sistema instalado"* na página de confirmação (seção 2.1). O `Excludes` da entrada principal mantém `data\`, `pdfs\` e `backups\` fora do pacote — contratado pelo teste *"instalador: pacote nunca leva dados…"* (seção 9.6), assim como a pré-checagem da compilação.
 
 ### 9.5 Estrutura do código
 
@@ -410,13 +426,13 @@ historico-escolar/
 ### 9.6 Testes
 
 ```bat
-node --test tests/smoke.test.js   # testes de API (84)
+node --test tests/smoke.test.js   # testes de API (85)
 npx playwright test               # testes de interface (42; usa a porta 3100)
 ```
 
 - Na primeira vez, instalar o navegador dos testes: `npx playwright install chromium`.
 - `npm test` roda a descoberta padrão do Node (`node --test`).
-- Cobrem: login/permissões, pedidos e regra de datas, cadastros, **importação e exportação CSV** (round-trip), matrículas e lote, diário, **declarações em lote (ZIP)**, transferências/retornos, pós-censo, alocação de professores, documentos em Word (ficha e declaração), relatórios (prévia e PDF, **alunos por turma com filtro em combo e agrupamento sem colapso de linhas**), **encerramento do ano letivo**, **migração em lote para o novo ano**, **painel inicial de pendências** (incluindo os **atalhos de emitir declaração e novo aluno**), **atualização sem perder dados** (contrato de empacotamento do instalador + reabertura do banco) e o rodapé **Sobre**.
+- Cobrem: login/permissões, pedidos e regra de datas, cadastros, **importação e exportação CSV** (round-trip), matrículas e lote, diário, **declarações em lote (ZIP)**, transferências/retornos, pós-censo, alocação de professores, documentos em Word (ficha e declaração), relatórios (prévia e PDF, **alunos por turma com filtro em combo e agrupamento sem colapso de linhas**), **encerramento do ano letivo**, **migração em lote para o novo ano**, **painel inicial de pendências** (incluindo os **atalhos de emitir declaração e novo aluno**), **atualização sem perder dados** (contrato de empacotamento do instalador + reabertura do banco) e a **pré-checagem da compilação do instalador** (node_modules e node.exe) e o rodapé **Sobre**.
 - Os testes de interface sobem o próprio servidor E2E em `localhost:3100` com banco temporário — deixe a porta 3100 livre.
 
 ---
