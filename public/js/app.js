@@ -2533,9 +2533,10 @@
   }
 
   // Vínculo do responsável: "Mãe" copia a Filiação 1, "Pai" copia a Filiação 2
-  // (nome, CPF, RG, estado civil, telefone e falecido — exatamente o pedido) e
-  // leva o cursor ao e-mail; "Outro Responsável" só foca o nome para digitação.
+  // (nome, CPF, RG, estado civil, telefone, falecido e o parentesco) e leva o
+  // cursor ao e-mail; "Outro Responsável" só foca o nome para digitação.
   const CAMPOS_VINCULO_RESPONSAVEL = ['nome', 'cpf', 'rg', 'estado_civil', 'telefone'];
+  const PARENTESCO_VINCULO = { mae: 'Mãe', pai: 'Pai' };
 
   function aplicarVinculoResponsavel(vinculo) {
     const form = $('#form-aluno');
@@ -2554,6 +2555,7 @@
     }
     const falecidoOrigem = form.elements[`${origem}_falecido`];
     if (falecidoOrigem) form.elements.responsavel_falecido.checked = falecidoOrigem.checked;
+    form.elements.responsavel_parentesco.value = PARENTESCO_VINCULO[vinculo];
 
     form.elements.responsavel_email.focus();
   }

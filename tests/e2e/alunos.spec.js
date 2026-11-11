@@ -206,6 +206,7 @@ test('campo responsável: rádio Mãe/Pai copia a filiação e Outro foca o nome
   await expect(page.locator('#form-aluno [name="responsavel_estado_civil"]')).toHaveValue('Casado');
   await expect(page.locator('#form-aluno [name="responsavel_telefone"]')).toHaveValue('(22) 99999-0001');
   await expect(page.locator('#form-aluno [name="responsavel_falecido"]')).toBeChecked();
+  await expect(page.locator('#form-aluno [name="responsavel_parentesco"]')).toHaveValue('Mãe');
   await expect(page.locator('#form-aluno [name="responsavel_email"]')).toBeFocused();
 
   // Pai: sobrescreve com a Filiação 2 (mesmo com o falecido da mãe marcado).
@@ -216,6 +217,7 @@ test('campo responsável: rádio Mãe/Pai copia a filiação e Outro foca o nome
   await expect(page.locator('#form-aluno [name="responsavel_estado_civil"]')).toHaveValue('Viúvo');
   await expect(page.locator('#form-aluno [name="responsavel_telefone"]')).toHaveValue('(22) 98888-0002');
   await expect(page.locator('#form-aluno [name="responsavel_falecido"]')).toBeChecked();
+  await expect(page.locator('#form-aluno [name="responsavel_parentesco"]')).toHaveValue('Pai');
   await expect(page.locator('#form-aluno [name="responsavel_email"]')).toBeFocused();
 
   // Mãe de novo: o falecido volta a acompanhar a Filiação 1 (já estava marcado).
@@ -223,6 +225,7 @@ test('campo responsável: rádio Mãe/Pai copia a filiação e Outro foca o nome
   await page.check('#form-aluno [name="responsavel_vinculo"][value="mae"]');
   await expect(page.locator('#form-aluno [name="responsavel_falecido"]')).not.toBeChecked();
   await expect(page.locator('#form-aluno [name="responsavel_nome"]')).toHaveValue('Maria do Vinculo E2E');
+  await expect(page.locator('#form-aluno [name="responsavel_parentesco"]')).toHaveValue('Mãe');
 
   // Outro Responsável: não copia nada e foca o nome para digitação manual.
   await page.fill('#form-aluno [name="responsavel_nome"]', 'Outro nome digitado');
