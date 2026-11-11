@@ -3,7 +3,7 @@
 ; resolve o caminho do node.exe)   ou   ISCC.exe instalador\HistoricoEscolar.iss
 
 #define NomeApp "Controle de Emissão de Histórico Escolar"
-#define Versao "1.3"
+#define Versao "1.4"
 
 ; ---------------------------------------------------------------
 ; Pré-checagens com mensagem clara. Sem elas o ISCC só diria

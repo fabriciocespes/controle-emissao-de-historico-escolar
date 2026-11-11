@@ -2532,6 +2532,32 @@
     $('#linha-transporte').hidden = !transporte;
   }
 
+  // Vínculo do responsável: "Mãe" copia a Filiação 1, "Pai" copia a Filiação 2
+  // (nome, CPF, RG, estado civil, telefone e falecido — exatamente o pedido) e
+  // leva o cursor ao e-mail; "Outro Responsável" só foca o nome para digitação.
+  const CAMPOS_VINCULO_RESPONSAVEL = ['nome', 'cpf', 'rg', 'estado_civil', 'telefone'];
+
+  function aplicarVinculoResponsavel(vinculo) {
+    const form = $('#form-aluno');
+    if (!vinculo) return;
+
+    if (vinculo === 'outro') {
+      form.elements.responsavel_nome.focus();
+      return;
+    }
+
+    const origem = vinculo === 'mae' ? 'filiacao1' : 'filiacao2';
+    for (const campo of CAMPOS_VINCULO_RESPONSAVEL) {
+      const origemEl = form.elements[`${origem}_${campo}`];
+      const destinoEl = form.elements[`responsavel_${campo}`];
+      if (origemEl && destinoEl) destinoEl.value = origemEl.value;
+    }
+    const falecidoOrigem = form.elements[`${origem}_falecido`];
+    if (falecidoOrigem) form.elements.responsavel_falecido.checked = falecidoOrigem.checked;
+
+    form.elements.responsavel_email.focus();
+  }
+
   function abrirAlunoNovo() {
     estado.alunoEdicao = null;
     const form = $('#form-aluno');
@@ -2797,6 +2823,9 @@
   $$('#form-aluno [name="laudo_especifico"], #form-aluno [name="laudo_reducao_carga"], #form-aluno [name="acompanhamento_especial"], #form-aluno [name="transporte_escolar"]')
     .forEach((el) => el.addEventListener('change', atualizarCondicionaisAluno));
   $('#form-aluno [name="def_outros"]').addEventListener('change', atualizarCondicionaisAluno);
+  $$('#form-aluno [name="responsavel_vinculo"]').forEach((el) =>
+    el.addEventListener('change', (evento) => aplicarVinculoResponsavel(evento.target.value))
+  );
 
   carregarPaises();
 
