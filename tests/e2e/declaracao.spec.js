@@ -114,12 +114,12 @@ test('declaração: tipo limitado pelo status do aluno e downloads', async ({ pa
   await abrirModalDeclaracao();
   await expect(page.locator('#declaracao-tipo option[value="transferencia"]')).toHaveCount(1);
   await expect(page.locator('#declaracao-tipo option[value="comprovacao"]')).toHaveCount(0);
-  // Transferido: tipo e situação já vêm selecionados; "Matriculado e
-  // Frequentando" fica habilitado junto com "Cursou", só "Matriculado" trava.
+  // Transferido: tipo e situação já vêm selecionados; os três radios de
+  // situação ficam habilitados (Matriculado, Matriculado e Frequentando, Cursou).
   await expect(page.locator('#declaracao-tipo')).toHaveValue('transferencia');
   await expect(page.locator('input[name="declaracao_situacao"]')).toHaveCount(3);
   await expect(page.locator('input[name="declaracao_situacao"][value="cursou"]')).toBeChecked();
-  await expect(page.locator('input[name="declaracao_situacao"][value="matriculado"]')).toBeDisabled();
+  await expect(page.locator('input[name="declaracao_situacao"][value="matriculado"]')).toBeEnabled();
   await expect(page.locator('input[name="declaracao_situacao"][value="frequentando"]')).toBeEnabled();
   await expect(page.locator('#declaracao-final-campo')).toBeVisible();
   await expect(page.locator('input[name="declaracao_final"]')).toHaveCount(7);

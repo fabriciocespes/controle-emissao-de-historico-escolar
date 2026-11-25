@@ -1262,16 +1262,14 @@
     $('#declaracao-final-campo').hidden = true;
     if (transferida) {
       // Transferido: tipo Transferência já vem selecionado e a situação vem
-      // marcada em "Cursou". "Matriculado e Frequentando" também fica
-      // disponível (pedido do usuário); só "Matriculado" segue desabilitado.
+      // marcada em "Cursou"; os outros radios (Matriculado, Matriculado e
+      // Frequentando) ficam disponíveis para o usuário trocar.
       $('#declaracao-tipo').value = 'transferencia';
       $('#declaracao-tipo').dispatchEvent(new Event('change'));
       for (const radio of document.querySelectorAll('input[name="declaracao_situacao"]')) {
         if (radio.value === 'cursou') {
           radio.checked = true;
           radio.dispatchEvent(new Event('change', { bubbles: true }));
-        } else if (radio.value !== 'frequentando') {
-          radio.disabled = true;
         }
       }
     }
