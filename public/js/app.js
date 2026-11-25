@@ -24,7 +24,7 @@
     usuario: null,
     csrf: null,
     painel: 'calendario',
-    buscas: { confeccionar: '', prontos: '', entregues: '', devendo: '', declaracao: '', ficha: '', usuarios: '', alunos: '', funcionarios: '', turmas: '', alocacoes: '', renovacao: '' },
+    buscas: { confeccionar: '', prontos: '', entregues: '', devendo: '', declaracao: '', ficha: '', transferencia: '', usuarios: '', alunos: '', funcionarios: '', turmas: '', alocacoes: '', renovacao: '' },
     pedido: null,
     pedidoEdicao: null,
     usuarioEdicao: null,
@@ -34,7 +34,7 @@
     alocacoes: { turmas: [], professores: [] },
     alocacaoTurmaId: null,
     escola: null,
-    listas: { alunos: [], matricula: [], funcionarios: [], turmas: [], declaracao: [], ficha: [] },
+    listas: { alunos: [], matricula: [], funcionarios: [], turmas: [], declaracao: [], ficha: [], transferencia: [] },
     matriculaLote: { ids: new Set(), selecionados: new Map() },
     diario: { turmaId: null, dados: null },
     fecharAno: { ano: null, turmaId: null, dados: null },
@@ -278,7 +278,7 @@
   function abrirPainel(nome) {
     estado.painel = nome;
     $$('.aba').forEach((a) => a.classList.toggle('ativa', a.dataset.painel === nome));
-    ['inicio', 'calendario', 'fechar-ano', 'reabrir-ano', 'migracao', 'renovacao', 'confeccionar', 'prontos', 'entregues', 'devendo', 'declaracao', 'ficha', 'alunos', 'matricula', 'diario', 'funcionarios', 'turmas', 'alocacoes', 'usuarios', 'administracao', 'backup', 'relatorios'].forEach((p) => {
+    ['inicio', 'calendario', 'fechar-ano', 'reabrir-ano', 'migracao', 'renovacao', 'confeccionar', 'prontos', 'entregues', 'devendo', 'declaracao', 'ficha', 'transferencia', 'alunos', 'matricula', 'diario', 'funcionarios', 'turmas', 'alocacoes', 'usuarios', 'administracao', 'backup', 'relatorios'].forEach((p) => {
       $(`#painel-${p}`).hidden = p !== nome;
     });
     carregarPainel();
@@ -304,6 +304,7 @@
     if (estado.painel === 'devendo') return carregarDevendo();
     if (estado.painel === 'declaracao') return carregarDeclaracao();
     if (estado.painel === 'ficha') return carregarFicha();
+    if (estado.painel === 'transferencia') return carregarTransferencia();
     return carregarPedidos();
   }
 
@@ -362,6 +363,7 @@
     if (!cartao) return;
     if (cartao.dataset.atalho === 'declaracao') abrirPainel('declaracao');
     if (cartao.dataset.atalho === 'ficha') abrirPainel('ficha');
+    if (cartao.dataset.atalho === 'transferencia') abrirPainel('transferencia');
     if (cartao.dataset.atalho === 'novo-aluno') abrirAlunoNovo();
   });
 
@@ -454,6 +456,22 @@
       if (estado.painel !== 'ficha') return;
       estado.listas.ficha = dados.itens;
       renderizar('ficha', dados.itens);
+    } catch (e) {
+      if (e.status !== 401) notificar(e.message, 'erro');
+    }
+  }
+
+  // Painel do atalho "Transferir aluno": mesma busca dos painéis de
+  // declaração/ficha; a ação em si abre o modal de transferência.
+  async function carregarTransferencia() {
+    const busca = estado.buscas.transferencia;
+    const parametros = new URLSearchParams();
+    if (busca) parametros.set('q', busca);
+    try {
+      const dados = await api('GET', `/api/alunos?${parametros.toString()}&porPagina=500`);
+      if (estado.painel !== 'transferencia') return;
+      estado.listas.transferencia = dados.itens;
+      renderizar('transferencia', dados.itens);
     } catch (e) {
       if (e.status !== 401) notificar(e.message, 'erro');
     }
@@ -722,6 +740,18 @@
         <td>${esc(p.responsavel_nome)}<span class="secundario">${esc(p.responsavel_parentesco)}</span></td>
         <td class="acao">
           <button type="button" class="btn mini primario" data-acao="emitir-ficha" data-id="${id}">Gerar Ficha</button>
+        </td>
+      </tr>`;
+    }
+
+    if (painel === 'transferencia') {
+      return `<tr>
+        <td class="negrito">${esc(p.nome)}</td>
+        <td>${esc(p.cpf)}</td>
+        <td>${esc(p.nascimento_br)}</td>
+        <td>${esc(p.responsavel_nome)}<span class="secundario">${esc(p.responsavel_parentesco)}</span></td>
+        <td class="acao">
+          <button type="button" class="btn mini primario" data-acao="transferir-aluno" data-id="${id}">Transferir</button>
         </td>
       </tr>`;
     }
@@ -1394,6 +1424,24 @@
 
   let transferenciaAtual = null;
 
+  // Atalho do Início (painel "Transferir aluno"): busca a matrícula ativa do
+  // aluno e abre o MESMO modal do select de Ações, com o tipo ainda por
+  // escolher (a própria abrirTransferencia avisa se não há matrícula ativa).
+  async function transferirAlunoRapido(id) {
+    const item = (estado.listas.transferencia || []).find((a) => a.id === id);
+    if (!item) return;
+    let matriculas = [];
+    try {
+      const dados = await api('GET', `/api/matriculas?aluno_id=${id}`);
+      matriculas = dados.itens || [];
+    } catch (e) {
+      if (e.status !== 401) notificar(e.message, 'erro');
+      return;
+    }
+    const { ativa } = analisarAcoesAluno(matriculas);
+    abrirTransferencia(item, ativa, '', 'criar');
+  }
+
   async function recarregarAposMatricula() {
     await carregarAlunos();
     await carregarMatricula();
@@ -1788,6 +1836,7 @@
   ligarBusca('#busca-renovacao', 'renovacao');
   ligarBusca('#busca-declaracao', 'declaracao');
   ligarBusca('#busca-ficha', 'ficha');
+  ligarBusca('#busca-transferencia', 'transferencia');
 
   /* ---------------- pedido ---------------- */
 
@@ -2146,6 +2195,7 @@
     if (botao.dataset.acao === 'excluir-aluno') prepararExclusaoAluno(id);
     if (botao.dataset.acao === 'emitir-declaracao') emitirDeclaracaoAluno(id);
     if (botao.dataset.acao === 'emitir-ficha') emitirFichaAluno(id);
+    if (botao.dataset.acao === 'transferir-aluno') transferirAlunoRapido(id);
     if (botao.dataset.acao === 'ficha-matricula') {
       baixarFichaMatricula({
         matriculaId: id,

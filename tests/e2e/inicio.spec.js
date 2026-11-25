@@ -10,6 +10,10 @@ const SIGLA_TURMA = 'INICIO-01';
 // Segundo aluno, criado sem matrícula, para o caminho de erro da ficha.
 const NOME_SEM_MATRICULA = 'Aluno Sem Matricula E2E';
 const CPF_SEM_MATRICULA = '991.000.004-00';
+// Terceiro aluno, com matrícula própria, para o atalho de transferência
+// (não mexe nos fixtures dos outros testes do arquivo).
+const NOME_TRANSFERENCIA = 'Aluno Transferencia E2E';
+const CPF_TRANSFERENCIA = '991.000.008-33';
 
 function alunoInicio() {
   return {
@@ -50,6 +54,9 @@ test.afterAll(async ({ browser }) => {
       await apiDelete(context, csrf, `/api/alunos/${a.id}`);
     }
     for (const a of await acharItens(context, '/api/alunos', NOME_SEM_MATRICULA)) {
+      await apiDelete(context, csrf, `/api/alunos/${a.id}`);
+    }
+    for (const a of await acharItens(context, '/api/alunos', NOME_TRANSFERENCIA)) {
       await apiDelete(context, csrf, `/api/alunos/${a.id}`);
     }
   } finally {
@@ -147,11 +154,12 @@ test('atalhos do Início: emitir declaração do aluno e novo aluno', async ({ p
   await page.goto('/');
   await expect(page.locator('#tela-app')).toBeVisible();
 
-  // Seção "Ações rápidas" com os três atalhos.
-  await expect(page.locator('#inicio-atalhos .inicio-cartao')).toHaveCount(3);
+  // Seção "Ações rápidas" com os quatro atalhos.
+  await expect(page.locator('#inicio-atalhos .inicio-cartao')).toHaveCount(4);
   await expect(page.locator('#inicio-atalhos [data-atalho="declaracao"]')).toBeVisible();
   await expect(page.locator('#inicio-atalhos [data-atalho="novo-aluno"]')).toBeVisible();
   await expect(page.locator('#inicio-atalhos [data-atalho="ficha"]')).toBeVisible();
+  await expect(page.locator('#inicio-atalhos [data-atalho="transferencia"]')).toBeVisible();
 
   // Atalho "Emitir declaração" → painel de escolha do aluno → mesmo modal do Diário.
   await page.click('#inicio-atalhos [data-atalho="declaracao"]');
@@ -258,4 +266,89 @@ test('atalho do Início: gerar ficha de matrícula do aluno sem sair da tela', a
   expect(baixou).toBeFalsy();
   await expect(page.locator('#notificacoes .aviso.erro').last())
     .toContainText('não possui matrícula');
+});
+
+test('atalho do Início: transferir aluno abre a modal e registra a transferência', async ({ page, context }) => {
+  const csrf = await apiLogin(context);
+
+  // Aluno próprio com matrícula (reaproveita a turma criada pelos testes anteriores).
+  let turma = (await acharItens(context, '/api/turmas', SIGLA_TURMA))[0];
+  if (!turma) {
+    turma = await apiPost(context, csrf, '/api/turmas', {
+      ano_letivo: new Date().getFullYear(),
+      matriz: 'Ensino Fundamental (Anos Iniciais)',
+      ano_escolaridade: '5º ano',
+      sigla: SIGLA_TURMA,
+      turno: 'Manhã',
+      tipo_turma: 'NAI',
+    });
+  }
+  let aluno = (await acharItens(context, '/api/alunos', NOME_TRANSFERENCIA))[0];
+  if (!aluno) {
+    aluno = await apiPost(context, csrf, '/api/alunos', {
+      ...alunoInicio(),
+      nome: NOME_TRANSFERENCIA,
+      cpf: CPF_TRANSFERENCIA,
+    });
+  }
+  let semMatricula = (await acharItens(context, '/api/alunos', NOME_SEM_MATRICULA))[0];
+  if (!semMatricula) {
+    semMatricula = await apiPost(context, csrf, '/api/alunos', {
+      ...alunoInicio(),
+      nome: NOME_SEM_MATRICULA,
+      cpf: CPF_SEM_MATRICULA,
+    });
+  }
+  const matriculas = await (await context.request.get(`/api/matriculas?aluno_id=${aluno.id}`)).json();
+  if (!(matriculas.itens || []).length) {
+    await apiPost(context, csrf, '/api/matriculas', {
+      aluno_id: aluno.id, turma_id: turma.id, data_inicio: '2026-02-10',
+    });
+  }
+
+  await page.goto('/');
+  await expect(page.locator('#tela-app')).toBeVisible();
+
+  // Atalho "Transferir aluno" → painel de escolha do aluno.
+  await page.click('#inicio-atalhos [data-atalho="transferencia"]');
+  await expect(page.locator('#painel-transferencia')).toBeVisible();
+  await expect(page.locator('#painel-inicio')).toBeHidden();
+
+  // Busca e clique em Transferir → mesmo modal do select de Ações do aluno.
+  await page.fill('#busca-transferencia', NOME_TRANSFERENCIA);
+  const linha = page.locator('#corpo-transferencia tr', { hasText: NOME_TRANSFERENCIA });
+  await expect(linha).toBeVisible();
+  await linha.getByRole('button', { name: 'Transferir' }).click();
+
+  // Tipo ainda por escolher (obrigatório) e data de hoje já preenchida.
+  await expect(page.locator('#modal-transferencia')).toBeVisible();
+  await expect(page.locator('#transferencia-titulo')).toHaveText('Transferência');
+  await expect(page.locator('#transferencia-tipo')).toHaveValue('');
+  await expect(page.locator('#transferencia-data')).toBeFocused();
+
+  // Escolhe o tipo, informa o destino e confirma.
+  await page.selectOption('#transferencia-tipo', 'transferido_externo');
+  await page.fill('#transferencia-destino', 'Escola Destino E2E');
+  await page.click('#form-transferencia button[type="submit"]');
+  await expect(page.locator('#modal-transferencia')).toBeHidden();
+  await expect(page.locator('#notificacoes .aviso.sucesso').last())
+    .toContainText('Transferência registrada com sucesso');
+
+  const depois = await (await context.request.get(`/api/matriculas?aluno_id=${aluno.id}`)).json();
+  expect((depois.itens || []).some((m) => m.status === 'transferido_externo')).toBeTruthy();
+
+  // Aluno sem matrícula ativa: aviso de erro e a modal não abre.
+  await page.fill('#busca-transferencia', NOME_SEM_MATRICULA);
+  const linhaSem = page.locator('#corpo-transferencia tr', { hasText: NOME_SEM_MATRICULA });
+  await expect(linhaSem).toBeVisible();
+  await linhaSem.getByRole('button', { name: 'Transferir' }).click();
+  await expect(page.locator('#modal-transferencia')).toBeHidden();
+  await expect(page.locator('#notificacoes .aviso.erro').last())
+    .toContainText('não possui matrícula ativa');
+
+  // A entrada no menu lateral abre o mesmo painel (a partir do Início).
+  await page.click('#aba-inicio');
+  await expect(page.locator('#painel-inicio')).toBeVisible();
+  await page.click('.aba[data-painel="transferencia"]');
+  await expect(page.locator('#painel-transferencia')).toBeVisible();
 });

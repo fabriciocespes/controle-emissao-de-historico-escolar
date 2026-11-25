@@ -369,6 +369,7 @@ h1, h2 { margin: 0; font-weight: 650; }
 }
 .inicio-icone.verde { background: var(--verde-fundo); color: var(--verde-texto); }
 .inicio-icone.ambar { background: var(--ambar-fundo); color: var(--ambar-texto); }
+.inicio-icone.roxo { background: var(--roxo-fundo); color: var(--roxo-texto); }
 
 /* ---------- Rodapé "Sobre o sistema" (todas as telas) ---------- */
 .rodape-sistema {

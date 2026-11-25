@@ -79,6 +79,7 @@
       <p class="menu-grupo">Enturmações</p>
       <button type="button" class="aba" data-painel="matricula">Matrícula</button>
       <button type="button" class="aba" data-painel="diario">Diário</button>
+      <button type="button" class="aba" data-painel="transferencia">Transferir aluno</button>
       <button type="button" class="aba" data-painel="ficha">Gerar ficha de matrícula</button>
       <button type="button" class="aba" data-painel="alocacoes">Professor <span class="badge azul" id="badge-alocacoes">0</span></button>
       <p class="menu-grupo">Relatórios</p>
@@ -176,6 +177,17 @@
           </span>
           <span class="inicio-rotulo">Gerar ficha de matrícula</span>
           <span class="inicio-detalhe">Escolher o aluno e baixar o .docx</span>
+        </button>
+        <button type="button" class="inicio-cartao" data-atalho="transferencia">
+          <span class="inicio-icone roxo" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M8 3 4 7l4 4"/><path d="M4 7h16"/>
+              <path d="m16 21 4-4-4-4"/><path d="M20 17H4"/>
+            </svg>
+          </span>
+          <span class="inicio-rotulo">Transferir aluno</span>
+          <span class="inicio-detalhe">Transferência intercampus ou externa</span>
         </button>
       </div>
     </section>
@@ -353,6 +365,32 @@
         </table>
       </div>
       <p class="vazio" id="vazio-ficha" hidden>Nenhum aluno encontrado.</p>
+    </section>
+
+    <section class="painel" id="painel-transferencia" hidden>
+      <div class="barra">
+        <input class="busca" id="busca-transferencia" type="search"
+               placeholder="Buscar aluno por nome ou CPF">
+        <span class="secundario" style="margin:0">
+          Escolha o aluno <b>com matrícula ativa</b> e clique em <b>Transferir</b> —
+          o tipo (intercampus ou externa) é escolhido na próxima tela.
+        </span>
+      </div>
+      <div class="tabela-rolagem">
+        <table>
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>CPF</th>
+              <th>Nascimento</th>
+              <th>Responsável</th>
+              <th class="acao">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="corpo-transferencia"></tbody>
+        </table>
+      </div>
+      <p class="vazio" id="vazio-transferencia" hidden>Nenhum aluno encontrado.</p>
     </section>
 
     <section class="painel" id="painel-alunos" hidden>
