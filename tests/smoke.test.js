@@ -2828,6 +2828,13 @@ test('declaração escolar: geração e validação dos parâmetros', async () =
     const transferidaComprovacao = await admin.enviar('GET', `${rota}&tipo=comprovacao&situacao=matriculado`);
     assert.equal(transferidaComprovacao.status, 400, 'aluno transferido só pode emitir transferência');
 
+    // ...mas a Transferência aceita a situação "Matriculado e Frequentando".
+    const transferidaFrequentando = await admin.enviar(
+      'GET', `${rota}&tipo=transferencia&situacao=frequentando`
+    );
+    assert.equal(transferidaFrequentando.status, 200, JSON.stringify(transferidaFrequentando.json));
+    assert.match(transferidaFrequentando.headers.get('content-type') || '', /wordprocessingml/);
+
     const cursouOk = await admin.enviar(
       'GET',
       `${rota}&tipo=transferencia&situacao=cursou&situacao_final=aprovado`

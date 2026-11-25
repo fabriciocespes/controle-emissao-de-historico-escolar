@@ -114,12 +114,13 @@ test('declaração: tipo limitado pelo status do aluno e downloads', async ({ pa
   await abrirModalDeclaracao();
   await expect(page.locator('#declaracao-tipo option[value="transferencia"]')).toHaveCount(1);
   await expect(page.locator('#declaracao-tipo option[value="comprovacao"]')).toHaveCount(0);
-  // Transferido: tipo e situação já vêm selecionados; só Cursou fica habilitado.
+  // Transferido: tipo e situação já vêm selecionados; "Matriculado e
+  // Frequentando" fica habilitado junto com "Cursou", só "Matriculado" trava.
   await expect(page.locator('#declaracao-tipo')).toHaveValue('transferencia');
   await expect(page.locator('input[name="declaracao_situacao"]')).toHaveCount(3);
   await expect(page.locator('input[name="declaracao_situacao"][value="cursou"]')).toBeChecked();
   await expect(page.locator('input[name="declaracao_situacao"][value="matriculado"]')).toBeDisabled();
-  await expect(page.locator('input[name="declaracao_situacao"][value="frequentando"]')).toBeDisabled();
+  await expect(page.locator('input[name="declaracao_situacao"][value="frequentando"]')).toBeEnabled();
   await expect(page.locator('#declaracao-final-campo')).toBeVisible();
   await expect(page.locator('input[name="declaracao_final"]')).toHaveCount(7);
   await expect(page.locator('#declaracao-ano option')).toHaveCount(15);
@@ -129,5 +130,18 @@ test('declaração: tipo limitado pelo status do aluno e downloads', async ({ pa
     page.click('#form-declaracao button[type="submit"]'),
   ]);
   expect(download2.suggestedFilename()).toBe('declaracao-escolar-aluno-declaracao-e2e.docx');
+  await expect(page.locator('#modal-declaracao')).toBeHidden();
+
+  // Escolher "Matriculado e Frequentando" esconde a situação final e baixa.
+  await abrirModalDeclaracao();
+  await expect(page.locator('input[name="declaracao_situacao"][value="frequentando"]')).toBeEnabled();
+  await page.check('input[name="declaracao_situacao"][value="frequentando"]');
+  await expect(page.locator('input[name="declaracao_situacao"][value="cursou"]')).not.toBeChecked();
+  await expect(page.locator('#declaracao-final-campo')).toBeHidden();
+  const [download3] = await Promise.all([
+    page.waitForEvent('download'),
+    page.click('#form-declaracao button[type="submit"]'),
+  ]);
+  expect(download3.suggestedFilename()).toBe('declaracao-escolar-aluno-declaracao-e2e.docx');
   await expect(page.locator('#modal-declaracao')).toBeHidden();
 });
