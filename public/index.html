@@ -1726,6 +1726,38 @@
   </div>
 </div>
 
+<div class="modal" id="modal-enturmar" hidden>
+  <div class="fundo" data-fechar></div>
+  <div class="cartao">
+    <div class="cartao-cabecalho">
+      <h2>Enturmar aluno</h2>
+      <button type="button" class="fecha" data-fechar aria-label="Fechar">&times;</button>
+    </div>
+    <div id="enturmar-etapa1">
+      <div class="resumo-acao" id="enturmar-pergunta"></div>
+      <p class="secundario">Ao matricular, o sistema já baixa a ficha de matrícula do aluno em PDF.</p>
+      <div class="rodape">
+        <button type="button" class="btn" id="enturmar-nao" data-fechar>Agora não</button>
+        <button type="button" class="btn primario" id="enturmar-sim">Sim, enturmar</button>
+      </div>
+    </div>
+    <form id="form-enturmar" autocomplete="off" hidden>
+      <div class="resumo-acao" id="enturmar-resumo"></div>
+      <label class="campo">
+        <span>Turma *</span>
+        <select id="enturmar-turma" name="turma_id" required>
+          <option value="">— Selecione a turma —</option>
+        </select>
+        <small class="ajuda">Somente as turmas abertas aparecem na lista.</small>
+      </label>
+      <div class="rodape">
+        <button type="button" class="btn" id="enturmar-voltar">Voltar</button>
+        <button type="submit" class="btn primario">Matricular</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div class="modal tela-cheia" id="modal-funcionario" hidden>
   <div class="fundo" data-fechar></div>
   <div class="cartao">

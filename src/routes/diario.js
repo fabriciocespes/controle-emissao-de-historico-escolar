@@ -2,6 +2,7 @@ const express = require('express');
 const fs = require('node:fs');
 const path = require('node:path');
 const { montarMarcadores, gerarArquivoDocx } = require('../services/fichaMatricula');
+const { converterDocxParaPdf } = require('../services/docxParaPdf');
 const { exigirTurmaAberta } = require('./encerramento');
 const {
   montarMarcadoresDeclaracao,
@@ -160,66 +161,95 @@ function rotasDiario({ db, config }) {
     resposta.json({ turma, professores, alunos: alunosDoDiario(turma.id) });
   });
 
-  roteador.get('/alunos/:alunoId(\\d+)/ficha-matricula', (requisicao, resposta) => {
-    const alunoId = Number(requisicao.params.alunoId);
-    const turmaId = Number(requisicao.query.turma_id);
-    const matriculaId = Number(requisicao.query.matricula_id);
+  roteador.get('/alunos/:alunoId(\\d+)/ficha-matricula', async (requisicao, resposta, proximo) => {
+    try {
+      const alunoId = Number(requisicao.params.alunoId);
+      const turmaId = Number(requisicao.query.turma_id);
+      const matriculaId = Number(requisicao.query.matricula_id);
 
-    if (!Number.isInteger(alunoId) || alunoId <= 0) {
-      throw erro(400, 'Aluno inválido.');
+      if (!Number.isInteger(alunoId) || alunoId <= 0) {
+        throw erro(400, 'Aluno inválido.');
+      }
+      if (!Number.isInteger(turmaId) || turmaId <= 0) {
+        throw erro(400, 'Informe a turma da matrícula (turma_id).');
+      }
+
+      const aluno = db
+        .prepare(`SELECT ${COLUNAS_ALUNO.join(', ')} FROM alunos WHERE id = ?`)
+        .get(alunoId);
+      if (!aluno) throw erro(404, 'Aluno não encontrado.');
+
+      const turma = db.prepare('SELECT * FROM turmas WHERE id = ?').get(turmaId);
+      if (!turma) throw erro(404, 'Turma não encontrada.');
+
+      const matricula = db
+        .prepare('SELECT * FROM matriculas WHERE id = ? AND aluno_id = ? AND turma_id = ?')
+        .get(Number.isInteger(matriculaId) && matriculaId > 0 ? matriculaId : 0, alunoId, turmaId);
+      if (!matricula) {
+        throw erro(409, `O aluno ${aluno.nome} não está matriculado na turma ${turma.sigla}.`);
+      }
+      const mantidaNoDiario = matricula.status === 'transferido_intercampus'
+        || matricula.status === 'transferido_externo'
+        || matricula.status === 'deixou_frequentar';
+      if (matricula.ativo !== 1 && !mantidaNoDiario) {
+        throw erro(409, `A matrícula de ${aluno.nome} na turma ${turma.sigla} não está ativa.`);
+      }
+
+      const modelo = config && config.modeloFichaAbs ? config.modeloFichaAbs : MODELO_FICHA;
+      if (!fs.existsSync(modelo)) {
+        throw erro(500, 'Modelo da ficha de matrícula não encontrado.');
+      }
+
+      const { dados } = gerarArquivoDocx({
+        modeloAbs: modelo,
+        dados: montarMarcadores(aluno, matricula, turma),
+      });
+
+      const seguro = String(aluno.nome || `aluno-${aluno.id}`)
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, '')
+        .replace(/[^a-zA-Z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .toLowerCase();
+
+      const enviarDocx = () => {
+        resposta.setHeader(
+          'Content-Type',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        );
+        resposta.setHeader(
+          'Content-Disposition',
+          `attachment; filename="ficha-matricula-${seguro || aluno.id}.docx"`
+        );
+        // O front usa este cabeçalho para avisar que o PDF não foi possível.
+        resposta.setHeader('X-Ficha-Formato', 'docx');
+        resposta.setHeader('Content-Length', String(dados.length));
+        return resposta.end(dados);
+      };
+
+      // formato=pdf: usado pelo fluxo de enturmação logo após o cadastro.
+      if (String(requisicao.query.formato || '').toLowerCase() !== 'pdf') return enviarDocx();
+
+      let pdf;
+      try {
+        pdf = await converterDocxParaPdf(dados);
+      } catch (e) {
+        // Sem o Microsoft Word (ou conversão falhou): a ficha sai em Word.
+        console.error(`[ficha-matricula] conversão para PDF falhou: ${e.message}`);
+        return enviarDocx();
+      }
+
+      resposta.setHeader('Content-Type', 'application/pdf');
+      resposta.setHeader(
+        'Content-Disposition',
+        `attachment; filename="ficha-matricula-${seguro || aluno.id}.pdf"`
+      );
+      resposta.setHeader('X-Ficha-Formato', 'pdf');
+      resposta.setHeader('Content-Length', String(pdf.length));
+      return resposta.end(pdf);
+    } catch (e) {
+      return proximo(e);
     }
-    if (!Number.isInteger(turmaId) || turmaId <= 0) {
-      throw erro(400, 'Informe a turma da matrícula (turma_id).');
-    }
-
-    const aluno = db
-      .prepare(`SELECT ${COLUNAS_ALUNO.join(', ')} FROM alunos WHERE id = ?`)
-      .get(alunoId);
-    if (!aluno) throw erro(404, 'Aluno não encontrado.');
-
-    const turma = db.prepare('SELECT * FROM turmas WHERE id = ?').get(turmaId);
-    if (!turma) throw erro(404, 'Turma não encontrada.');
-
-    const matricula = db
-      .prepare('SELECT * FROM matriculas WHERE id = ? AND aluno_id = ? AND turma_id = ?')
-      .get(Number.isInteger(matriculaId) && matriculaId > 0 ? matriculaId : 0, alunoId, turmaId);
-    if (!matricula) {
-      throw erro(409, `O aluno ${aluno.nome} não está matriculado na turma ${turma.sigla}.`);
-    }
-    const mantidaNoDiario = matricula.status === 'transferido_intercampus'
-      || matricula.status === 'transferido_externo'
-      || matricula.status === 'deixou_frequentar';
-    if (matricula.ativo !== 1 && !mantidaNoDiario) {
-      throw erro(409, `A matrícula de ${aluno.nome} na turma ${turma.sigla} não está ativa.`);
-    }
-
-    const modelo = config && config.modeloFichaAbs ? config.modeloFichaAbs : MODELO_FICHA;
-    if (!fs.existsSync(modelo)) {
-      throw erro(500, 'Modelo da ficha de matrícula não encontrado.');
-    }
-
-    const { nome, dados } = gerarArquivoDocx({
-      modeloAbs: modelo,
-      dados: montarMarcadores(aluno, matricula, turma),
-    });
-
-    const seguro = String(aluno.nome || `aluno-${aluno.id}`)
-      .normalize('NFD')
-      .replace(/[̀-ͯ]/g, '')
-      .replace(/[^a-zA-Z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .toLowerCase();
-
-    resposta.setHeader(
-      'Content-Type',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-    );
-    resposta.setHeader(
-      'Content-Disposition',
-      `attachment; filename="ficha-matricula-${seguro || aluno.id}.docx"`
-    );
-    resposta.setHeader('Content-Length', String(dados.length));
-    return resposta.end(dados);
   });
 
   roteador.get('/alunos/:alunoId(\\d+)/declaracao', (requisicao, resposta) => {

@@ -2734,9 +2734,94 @@
       estado.alunoEdicao = null;
       carregarAlunos();
       carregarMatricula();
+      // Cadastro novo: pergunta se o aluno deve ser enturmado agora.
+      if (!emEdicao) abrirEnturmar(alunoSalvo);
     } catch (e) {
       if (e.campos) mostrarErros(form, e.campos, MAPA_ALUNO);
       else notificar(e.message, 'erro');
+    }
+  });
+
+  /* -------- enturmação imediata após o cadastro de um aluno novo -------- */
+
+  // Aluno recém-cadastrado: o sistema pergunta se deseja enturmar; com a turma
+  // escolhida ele matricula e já baixa a ficha de matrícula em PDF.
+  let enturmarAtual = null;
+
+  function abrirEnturmar(aluno) {
+    enturmarAtual = aluno || null;
+    if (!aluno || !aluno.id) return;
+    $('#enturmar-pergunta').textContent =
+      `O aluno ${aluno.nome} foi cadastrado. Deseja enturmá-lo agora?`;
+    $('#enturmar-resumo').textContent = `Aluno: ${aluno.nome}`;
+    $('#enturmar-etapa1').hidden = false;
+    $('#form-enturmar').hidden = true;
+    $('#enturmar-turma').innerHTML = '<option value="">— Selecione a turma —</option>';
+    abrirModal('#modal-enturmar');
+  }
+
+  async function carregarTurmasEnturmar() {
+    const select = $('#enturmar-turma');
+    select.innerHTML = '<option value="">Carregando turmas…</option>';
+    try {
+      const dados = await api('GET', '/api/turmas?porPagina=500');
+      const turmas = (dados.itens || [])
+        .filter((t) => !Number(t.fechada))
+        .sort((a, b) => (Number(b.ano_letivo) - Number(a.ano_letivo))
+          || String(a.sigla).localeCompare(String(b.sigla)));
+      select.innerHTML = '<option value="">— Selecione a turma —</option>' +
+        turmas.map((t) => {
+          const tipo = t.tipo_turma ? ` · ${esc(t.tipo_turma)}` : '';
+          return `<option value="${t.id}">${esc(t.sigla)} — ${t.ano_letivo}` +
+            ` · ${esc(t.ano_escolaridade)} · ${esc(t.turno)}${tipo}</option>`;
+        }).join('');
+      if (turmas.length === 0) notificar('Não há turmas abertas para matricular o aluno.', 'erro');
+    } catch (e) {
+      select.innerHTML = '<option value="">— Selecione a turma —</option>';
+      if (e.status !== 401) notificar(e.message, 'erro');
+    }
+  }
+
+  $('#enturmar-sim').addEventListener('click', async () => {
+    $('#enturmar-etapa1').hidden = true;
+    $('#form-enturmar').hidden = false;
+    await carregarTurmasEnturmar();
+    $('#enturmar-turma').focus();
+  });
+
+  $('#enturmar-voltar').addEventListener('click', () => {
+    $('#form-enturmar').hidden = true;
+    $('#enturmar-etapa1').hidden = false;
+  });
+
+  $('#form-enturmar').addEventListener('submit', async (evento) => {
+    evento.preventDefault();
+    const aluno = enturmarAtual;
+    if (!aluno) return;
+    const turmaId = Number($('#enturmar-turma').value) || 0;
+    if (!turmaId) {
+      notificar('Selecione a turma para matricular o aluno.', 'erro');
+      return;
+    }
+    try {
+      const matricula = await api('POST', '/api/matriculas', {
+        aluno_id: aluno.id,
+        turma_id: turmaId,
+      });
+      fecharModal($('#modal-enturmar'));
+      enturmarAtual = null;
+      notificar('Aluno matriculado com sucesso.', 'sucesso');
+      for (const aviso of (matricula && matricula.avisos) || []) notificar(aviso, 'erro');
+      carregarAlunos();
+      carregarMatricula();
+      await baixarFichaMatricula({
+        matriculaId: matricula.id,
+        alunoId: aluno.id,
+        turmaId,
+        formato: 'pdf',
+      });
+    } catch (e) {
+      notificar(e.message, 'erro');
     }
   });
 
@@ -4493,11 +4578,25 @@
     }
   }
 
-  function baixarFichaMatricula({ matriculaId, alunoId, turmaId }) {
+  // formato: 'docx' (padrão) ou 'pdf'. O cabeçalho X-Ficha-Formato diz o que
+  // realmente chegou — sem o Microsoft Word o servidor devolve o .docx.
+  function baixarFichaMatricula({ matriculaId, alunoId, turmaId, formato = 'docx' }) {
     return baixarDocumento(
-      `/api/diario/alunos/${alunoId}/ficha-matricula?turma_id=${turmaId}&matricula_id=${matriculaId}`,
+      `/api/diario/alunos/${alunoId}/ficha-matricula` +
+      `?turma_id=${turmaId}&matricula_id=${matriculaId}&formato=${encodeURIComponent(formato)}`,
       'Não foi possível gerar a ficha de matrícula.',
-      'Ficha de matrícula gerada.'
+      'Ficha de matrícula gerada.',
+      (resposta) => {
+        const veio = resposta.headers.get('x-ficha-formato') || 'docx';
+        if (formato === 'pdf' && veio !== 'pdf') {
+          notificar(
+            'Ficha de matrícula baixada em Word (.docx): não foi possível gerar o PDF.',
+            'erro'
+          );
+        } else {
+          notificar(veio === 'pdf' ? 'Ficha de matrícula gerada em PDF.' : 'Ficha de matrícula gerada.', 'sucesso');
+        }
+      }
     );
   }
 

@@ -5172,3 +5172,53 @@ test('atualização por cima: versão nova no mesmo banco preserva dados e senha
     fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
   }
 });
+
+/* ---------------- ficha de matrícula em PDF ---------------- */
+
+// O fluxo de enturmação (salvar aluno → matricular) pede a ficha em PDF.
+// A conversão usa o Microsoft Word da máquina; sem ele a rota devolve o .docx.
+test('ficha de matrícula em PDF: formato=pdf converte e o padrão continua .docx', async () => {
+  const admin = new Cliente(base);
+  await admin.login('admin', 'admin123');
+
+  const aluno = await admin.enviar('POST', '/api/alunos', alunoCadastro({
+    nome: 'Aluno Ficha PDF Teste',
+    cpf: cpfNovo('400000002'),
+    filiacao1_cpf: '',
+  }));
+  assert.equal(aluno.status, 201, JSON.stringify(aluno.json));
+
+  const turma = await admin.enviar('POST', '/api/turmas', turmaCadastro({
+    sigla: 'PDF-01', ano_escolaridade: '4º ano',
+  }));
+  assert.equal(turma.status, 201, JSON.stringify(turma.json));
+
+  try {
+    const criada = await admin.enviar('POST', '/api/matriculas', {
+      aluno_id: aluno.json.id, turma_id: turma.json.id, data_inicio: '2026-02-10',
+    });
+    assert.equal(criada.status, 201, JSON.stringify(criada.json));
+
+    const rota = `/api/diario/alunos/${aluno.json.id}/ficha-matricula` +
+      `?turma_id=${turma.json.id}&matricula_id=${criada.json.id}`;
+
+    const docx = await admin.enviar('GET', rota, undefined, { binario: true });
+    assert.equal(docx.status, 200);
+    assert.equal(docx.headers.get('x-ficha-formato'), 'docx', 'sem formato=pdf segue o Word');
+    assert.match(docx.headers.get('content-disposition'), /ficha-matricula-[^"]+\.docx"/);
+    assert.equal(docx.buffer.toString('latin1', 0, 2), 'PK', 'o .docx é um ZIP');
+
+    const pdf = await admin.enviar('GET', `${rota}&formato=pdf`, undefined, { binario: true });
+    assert.equal(pdf.status, 200, 'a conversão para PDF não pode falhar nesta máquina');
+    assert.equal(pdf.headers.get('content-type'), 'application/pdf');
+    assert.equal(pdf.headers.get('x-ficha-formato'), 'pdf');
+    assert.match(pdf.headers.get('content-disposition'), /ficha-matricula-[^"]+\.pdf"/);
+    assert.equal(pdf.buffer.toString('latin1', 0, 5), '%PDF-', 'o corpo começa com %PDF-');
+    assert.ok(pdf.buffer.length > 50000, 'o PDF traz a ficha inteira');
+  } finally {
+    const excluidaTurma = await admin.enviar('DELETE', `/api/turmas/${turma.json.id}`, { confirmar: true });
+    assert.equal(excluidaTurma.status, 200);
+    const excluidoAluno = await admin.enviar('DELETE', `/api/alunos/${aluno.json.id}`, { confirmar: true });
+    assert.equal(excluidoAluno.status, 200);
+  }
+});

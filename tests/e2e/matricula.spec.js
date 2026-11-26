@@ -130,6 +130,11 @@ test('matricular aluno novo: cadastrar, confirmar e matricular', async ({ page, 
   await expect(page.locator('#modal-aluno')).toBeHidden();
   await expect(page.locator('#notificacoes .aviso.sucesso')).toContainText('Aluno cadastrado com sucesso.');
 
+  // Cadastro novo abre a pergunta de enturmação; este fluxo matricula em lote.
+  await expect(page.locator('#modal-enturmar')).toBeVisible();
+  await page.click('#enturmar-nao');
+  await expect(page.locator('#modal-enturmar')).toBeHidden();
+
   await page.click('.aba[data-painel="matricula"]');
   await expect(page.locator(`#corpo-matricula tr:has-text("${NOME_ALUNO_NOVO}")`)).toBeVisible();
   await page.click(`#corpo-matricula tr:has-text("${NOME_ALUNO_NOVO}") button[data-acao="adicionar-lote"]`);
